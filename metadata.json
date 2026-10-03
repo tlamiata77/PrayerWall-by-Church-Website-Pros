@@ -1,0 +1,6 @@
+{
+  "name": "GraceWall - Multi-Church Prayer Wall & Bulletin Suite",
+  "description": "Multi-tenant church prayer wall platform with AI safety moderation, printable Sunday bulletin builder, embeddable website widgets, and super admin login-as troubleshooting.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
