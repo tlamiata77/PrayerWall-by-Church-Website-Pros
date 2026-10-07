@@ -354,6 +354,74 @@ Tone: Gentle, compassionate, faith-filled, non-preachy.`;
   }
 });
 
+/**
+ * POST /api/transcribe-audio
+ * Accepts base64 encoded audio (e.g. audio/webm or audio/mp4 recorded from browser microphone)
+ * and returns high-accuracy speech-to-text transcription using Gemini.
+ */
+app.post('/api/transcribe-audio', async (req: Request, res: Response) => {
+  try {
+    const { audioBase64, mimeType = 'audio/webm' } = req.body;
+
+    if (!audioBase64) {
+      res.status(400).json({ error: 'Missing audio data' });
+      return;
+    }
+
+    if (ai) {
+      try {
+        // Strip data: prefix if present
+        const cleanBase64 = audioBase64.replace(/^data:[^;]+;base64,/, '');
+
+        const response = await ai.models.generateContent({
+          model: 'gemini-3.5-transcribe',
+          contents: [
+            {
+              inlineData: {
+                data: cleanBase64,
+                mimeType,
+              },
+            },
+            'Please accurately transcribe this spoken prayer request into clean, clear text. Transcribe the words exactly as spoken, with proper punctuation and capitalization. Output only the transcribed prayer request text without introductory or conversational phrases.',
+          ],
+        });
+
+        const text = response.text?.trim() || '';
+        res.json({ success: true, text });
+        return;
+      } catch (err: any) {
+        console.warn('Gemini audio transcription model (gemini-3.5-transcribe) error, trying gemini-3.8-flash:', err?.message || err);
+        try {
+          const cleanBase64 = audioBase64.replace(/^data:[^;]+;base64,/, '');
+          const response = await ai.models.generateContent({
+            model: 'gemini-3.8-flash',
+            contents: [
+              {
+                inlineData: {
+                  data: cleanBase64,
+                  mimeType,
+                },
+              },
+              'Please transcribe this audio into plain text. Provide only the transcription.',
+            ],
+          });
+          const text = response.text?.trim() || '';
+          res.json({ success: true, text });
+          return;
+        } catch (subErr: any) {
+          console.warn('Fallback Gemini audio transcription also failed:', subErr?.message || subErr);
+        }
+      }
+    }
+
+    res.status(503).json({
+      error: 'Audio transcription service currently unavailable. Please type your request or use browser voice dictation.',
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Transcription error' });
+  }
+});
+
 // Setup Vite middleware for local development
 async function start() {
   const isProd = process.env.NODE_ENV === 'production';

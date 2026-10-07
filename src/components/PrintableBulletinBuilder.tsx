@@ -963,16 +963,25 @@ export const PrintableBulletinBuilder: React.FC = () => {
           {/* Sheet Header: Compact, Ink-friendly Header */}
           <div className="border-b-2 border-stone-900 pb-2.5 mb-3.5">
             <div className="flex items-start justify-between gap-3">
-              <div>
-                <span className="text-[9px] tracking-widest uppercase font-bold text-stone-600 block">
-                  {currentChurch.denomination}
-                </span>
-                <h1 className="font-serif-church text-xl sm:text-2xl font-bold tracking-tight text-stone-950">
-                  {customTitle}
-                </h1>
-                <p className="text-[10px] text-stone-600 font-serif-church italic">
-                  {currentChurch.name} • {currentChurch.city}, {currentChurch.state}
-                </p>
+              <div className="flex items-center gap-3">
+                {currentChurch.logoUrl && (
+                  <img
+                    src={currentChurch.logoUrl}
+                    alt={currentChurch.name}
+                    className="w-10 h-10 rounded object-cover shrink-0 border border-stone-300 print:filter print:grayscale"
+                  />
+                )}
+                <div>
+                  <span className="text-[9px] tracking-widest uppercase font-bold text-stone-600 block">
+                    {currentChurch.denomination}
+                  </span>
+                  <h1 className="font-serif-church text-xl sm:text-2xl font-bold tracking-tight text-stone-950">
+                    {customTitle}
+                  </h1>
+                  <p className="text-[10px] text-stone-600 font-serif-church italic">
+                    {currentChurch.name} • {currentChurch.address ? `${currentChurch.address}, ` : ''}{currentChurch.city}, {currentChurch.state} {currentChurch.zipCode || ''} {currentChurch.phone ? `• ${currentChurch.phone}` : ''}
+                  </p>
+                </div>
               </div>
 
               <div className="text-right">

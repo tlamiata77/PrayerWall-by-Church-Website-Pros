@@ -24,8 +24,11 @@ export interface ModerationDetails {
   crisisAssistanceDetected?: boolean;
 }
 
+export type AppTab = 'wall' | 'bulletin' | 'staff' | 'directory' | 'my-prayers' | 'global' | 'embed';
+
 export interface PrayerRequest {
   id: string;
+  userId?: string;
   churchId: string;
   churchName?: string;
   churchSlug?: string;
@@ -53,9 +56,13 @@ export interface PrayerRequest {
   isArchivedFromPrint?: boolean;
   archivedFromPrintAt?: string;
   recentEncouragements?: Array<{ text: string; date: string; from?: string }>;
+  lastResubmittedAt?: string;
+  resubmittedTimes?: number;
 }
 
 export type WallLayoutType = 'grid' | 'list' | 'compact' | 'masonry';
+
+export type ChurchThemeColor = 'teal_pink' | 'amber' | 'emerald' | 'indigo' | 'rose' | 'sky' | 'custom';
 
 export interface Church {
   id: string;
@@ -70,8 +77,11 @@ export interface Church {
   address: string;
   city: string;
   state: string;
+  zipCode?: string;
   websiteUrl: string;
-  themeColor: 'amber' | 'emerald' | 'indigo' | 'rose' | 'sky';
+  themeColor: ChurchThemeColor;
+  primaryColor?: string;
+  accentColor?: string;
   welcomeMessage: string;
   scriptureVerse: string;
   bulletinTitle?: string;
@@ -86,6 +96,43 @@ export interface Church {
 }
 
 export type UserRole = 'super_admin' | 'church_staff' | 'congregation_member' | 'embed_view';
+
+export interface UserAccount {
+  id: string;
+  email: string;
+  password?: string;
+  name: string;
+  role: UserRole;
+  churchId: string;
+  avatarUrl?: string;
+  phone?: string;
+  title?: string;
+  createdAt: string;
+}
+
+export type DirectoryGroup = 
+  | 'Pastoral Staff'
+  | 'Ministry Leadership'
+  | 'Elders & Deacons'
+  | 'Worship & Tech'
+  | 'Congregation Members';
+
+export interface DirectoryMember {
+  id: string;
+  churchId: string;
+  name: string;
+  roleTitle: string;
+  group: DirectoryGroup;
+  email: string;
+  phone: string;
+  photoUrl: string;
+  address?: string;
+  bio?: string;
+  familyMembers?: string;
+  joinedYear?: string;
+  isPublicInDirectory: boolean;
+  createdAt?: string;
+}
 
 export interface PrintConfig {
   template: 'bulletin_2col' | 'bulletin_1col' | 'pastoral_care' | 'prayer_meeting';

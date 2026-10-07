@@ -1,7 +1,9 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Church, PrayerRequest, UserRole, VisibilityType, RequestCategory } from '../types';
+import { Church, PrayerRequest, UserRole, VisibilityType, RequestCategory, AppTab, UserAccount, DirectoryMember } from '../types';
 import { INITIAL_CHURCHES, INITIAL_REQUESTS } from '../data/initialData';
 import { SAMPLE_75_WEEKLY_REQUESTS } from '../data/sample75Requests';
+import { INITIAL_USERS } from '../data/initialUsers';
+import { INITIAL_DIRECTORY_MEMBERS } from '../data/initialDirectory';
 
 interface AppContextType {
   churches: Church[];
@@ -19,10 +21,25 @@ interface AppContextType {
   globalRequests: PrayerRequest[];
   flaggedRequests: PrayerRequest[];
   privateRequests: PrayerRequest[];
-  activeTab: 'wall' | 'bulletin' | 'staff' | 'global' | 'embed';
-  setActiveTab: (tab: 'wall' | 'bulletin' | 'staff' | 'global' | 'embed') => void;
+  activeTab: AppTab;
+  setActiveTab: (tab: AppTab) => void;
   submitModalOpen: boolean;
   setSubmitModalOpen: (open: boolean) => void;
+  users: UserAccount[];
+  currentUser: UserAccount | null;
+  directory: DirectoryMember[];
+  loginModalOpen: boolean;
+  setLoginModalOpen: (open: boolean) => void;
+  openLoginModal: (redirectTab?: AppTab) => void;
+  closeLoginModal: () => void;
+  login: (email: string, password?: string) => { success: boolean; error?: string };
+  logout: () => void;
+  register: (data: Omit<UserAccount, 'id' | 'createdAt'> & { password?: string }) => { success: boolean; error?: string };
+  switchAccount: (userId: string) => void;
+  resubmitPrayerRequest: (requestId: string, updatedContent?: string, isUrgent?: boolean) => void;
+  addDirectoryMember: (member: Omit<DirectoryMember, 'id' | 'createdAt'>) => string;
+  updateDirectoryMember: (id: string, updates: Partial<DirectoryMember>) => void;
+  deleteDirectoryMember: (id: string) => void;
   addPrayerRequest: (data: {
     title: string;
     content: string;
@@ -93,9 +110,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   });
 
-  const [activeTab, setActiveTab] = useState<'wall' | 'bulletin' | 'staff' | 'global' | 'embed'>('wall');
+  const [activeTab, setActiveTab] = useState<AppTab>('wall');
   const [submitModalOpen, setSubmitModalOpen] = useState(false);
   const [isModerating, setIsModerating] = useState(false);
+  const [loginModalOpen, setLoginModalOpen] = useState(false);
+
+  // User Accounts & Authentication State
+  const [users, setUsers] = useState<UserAccount[]>(() => {
+    try {
+      const saved = localStorage.getItem('gracewall_users');
+      return saved ? JSON.parse(saved) : INITIAL_USERS;
+    } catch {
+      return INITIAL_USERS;
+    }
+  });
+
+  const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
+    try {
+      const saved = localStorage.getItem('gracewall_current_user');
+      return saved ? JSON.parse(saved) : INITIAL_USERS[0]; // Default to Pastor David Matthews for immediate full capability
+    } catch {
+      return INITIAL_USERS[0];
+    }
+  });
+
+  // Church Directory State
+  const [directory, setDirectory] = useState<DirectoryMember[]>(() => {
+    try {
+      const saved = localStorage.getItem('gracewall_directory');
+      return saved ? JSON.parse(saved) : INITIAL_DIRECTORY_MEMBERS;
+    } catch {
+      return INITIAL_DIRECTORY_MEMBERS;
+    }
+  });
 
   // Sync to localStorage
   useEffect(() => {
@@ -113,6 +160,175 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       console.warn('Failed saving requests to localStorage', e);
     }
   }, [requests]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('gracewall_users', JSON.stringify(users));
+    } catch (e) {
+      console.warn('Failed saving users to localStorage', e);
+    }
+  }, [users]);
+
+  useEffect(() => {
+    try {
+      if (currentUser) {
+        localStorage.setItem('gracewall_current_user', JSON.stringify(currentUser));
+      } else {
+        localStorage.removeItem('gracewall_current_user');
+      }
+    } catch (e) {
+      console.warn('Failed saving current user to localStorage', e);
+    }
+  }, [currentUser]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('gracewall_directory', JSON.stringify(directory));
+    } catch (e) {
+      console.warn('Failed saving directory to localStorage', e);
+    }
+  }, [directory]);
+
+  // Auth Methods
+  const login = (email: string, password?: string) => {
+    const found = users.find(
+      (u) => u.email.trim().toLowerCase() === email.trim().toLowerCase()
+    );
+    if (!found) {
+      return { success: false, error: 'No account found with this email address.' };
+    }
+    if (password && found.password && found.password !== password) {
+      return { success: false, error: 'Incorrect password. Try demo password or check spelling.' };
+    }
+
+    setCurrentUser(found);
+    setActiveRole(found.role);
+    if (found.churchId && found.role !== 'super_admin') {
+      setCurrentChurchId(found.churchId);
+    }
+    return { success: true };
+  };
+
+  const logout = () => {
+    setCurrentUser(null);
+    setActiveRole('congregation_member');
+    setActiveTab('wall');
+  };
+
+  const register = (data: Omit<UserAccount, 'id' | 'createdAt'> & { password?: string }) => {
+    const existing = users.find(
+      (u) => u.email.trim().toLowerCase() === data.email.trim().toLowerCase()
+    );
+    if (existing) {
+      return { success: false, error: 'An account with this email already exists.' };
+    }
+
+    const newUser: UserAccount = {
+      ...data,
+      id: `user-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+    };
+
+    setUsers((prev) => [...prev, newUser]);
+    setCurrentUser(newUser);
+    setActiveRole(newUser.role);
+    if (newUser.churchId) {
+      setCurrentChurchId(newUser.churchId);
+    }
+
+    // Auto add to church directory
+    const newDirMember: DirectoryMember = {
+      id: `dir-${Date.now()}`,
+      churchId: newUser.churchId,
+      name: newUser.name,
+      roleTitle: newUser.title || (newUser.role === 'church_staff' ? 'Pastoral Staff' : 'Congregation Member'),
+      group: newUser.role === 'church_staff' ? 'Pastoral Staff' : 'Congregation Members',
+      email: newUser.email,
+      phone: newUser.phone || '(555) 000-0000',
+      photoUrl: newUser.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=240&h=240&q=80',
+      isPublicInDirectory: true,
+      joinedYear: new Date().getFullYear().toString(),
+      createdAt: new Date().toISOString(),
+    };
+    setDirectory((prev) => [newDirMember, ...prev]);
+
+    return { success: true };
+  };
+
+  const switchAccount = (userId: string) => {
+    const found = users.find((u) => u.id === userId);
+    if (found) {
+      setCurrentUser(found);
+      setActiveRole(found.role);
+      if (found.churchId && found.role !== 'super_admin') {
+        setCurrentChurchId(found.churchId);
+      }
+    }
+  };
+
+  const openLoginModal = (_redirectTab?: AppTab) => {
+    setLoginModalOpen(true);
+  };
+
+  const closeLoginModal = () => {
+    setLoginModalOpen(false);
+  };
+
+  // Directory Methods
+  const addDirectoryMember = (memberData: Omit<DirectoryMember, 'id' | 'createdAt'>) => {
+    const newId = `dir-${Date.now()}`;
+    const newMember: DirectoryMember = {
+      ...memberData,
+      id: newId,
+      createdAt: new Date().toISOString(),
+    };
+    setDirectory((prev) => [newMember, ...prev]);
+    return newId;
+  };
+
+  const updateDirectoryMember = (id: string, updates: Partial<DirectoryMember>) => {
+    setDirectory((prev) =>
+      prev.map((m) => (m.id === id ? { ...m, ...updates } : m))
+    );
+  };
+
+  const deleteDirectoryMember = (id: string) => {
+    setDirectory((prev) => prev.filter((m) => m.id !== id));
+  };
+
+  // Resubmit Prayer Request to Wall
+  const resubmitPrayerRequest = (requestId: string, updatedContent?: string, isUrgent?: boolean) => {
+    setRequests((prev) =>
+      prev.map((r) => {
+        if (r.id === requestId) {
+          const newContent = updatedContent?.trim()
+            ? `${r.content}\n\n[Renewed ${new Date().toLocaleDateString()}]: ${updatedContent.trim()}`
+            : r.content;
+          const resubmitTimes = (r.resubmittedTimes || 0) + 1;
+          return {
+            ...r,
+            content: newContent,
+            isUrgent: isUrgent !== undefined ? isUrgent : r.isUrgent,
+            createdAt: new Date().toISOString(),
+            lastResubmittedAt: new Date().toISOString(),
+            resubmittedTimes: resubmitTimes,
+            status: 'approved' as const,
+            isArchived: false,
+            isArchivedFromPrint: false,
+            recentEncouragements: [
+              {
+                text: 'Request resubmitted to church wall for continued prayer and intercession.',
+                date: new Date().toISOString().split('T')[0],
+                from: currentUser?.name || 'Member',
+              },
+              ...(r.recentEncouragements || []),
+            ],
+          };
+        }
+        return r;
+      })
+    );
+  };
 
   const currentChurch = churches.find((c) => c.id === currentChurchId) || churches[0];
   const impersonatedChurch = impersonatedChurchId
@@ -209,14 +425,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const newRequest: PrayerRequest = {
       id: `req-${Date.now()}`,
+      userId: currentUser?.id,
       churchId: currentChurchId,
       churchName: currentChurch.name,
       churchSlug: currentChurch.slug,
       title: data.title,
       content: data.content,
-      requesterName: data.isAnonymous ? 'Anonymous Church Member' : (data.requesterName || 'Anonymous'),
-      requesterEmail: data.requesterEmail,
-      requesterPhone: data.requesterPhone,
+      requesterName: data.isAnonymous
+        ? 'Anonymous Church Member'
+        : data.requesterName || currentUser?.name || 'Anonymous',
+      requesterEmail: data.requesterEmail || currentUser?.email,
+      requesterPhone: data.requesterPhone || currentUser?.phone,
       isAnonymous: data.isAnonymous,
       visibility: data.visibility,
       category: (moderationResult.suggestedCategory as RequestCategory) || data.category,
@@ -532,6 +751,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setActiveTab,
         submitModalOpen,
         setSubmitModalOpen,
+        users,
+        currentUser,
+        directory,
+        loginModalOpen,
+        setLoginModalOpen,
+        openLoginModal,
+        closeLoginModal,
+        login,
+        logout,
+        register,
+        switchAccount,
+        resubmitPrayerRequest,
+        addDirectoryMember,
+        updateDirectoryMember,
+        deleteDirectoryMember,
         addPrayerRequest,
         incrementPrayerCount,
         updateRequestModeration,

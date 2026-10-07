@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { PrayerRequest, Church } from '../types';
+import { PrayerRequest, Church, ChurchThemeColor } from '../types';
+import { PRESET_THEMES, getChurchTheme } from '../utils/theme';
 import {
   ShieldAlert,
   ShieldCheck,
@@ -26,7 +27,12 @@ import {
   Archive,
   RotateCcw,
   Printer,
-  HeartHandshake
+  HeartHandshake,
+  KeyRound,
+  Palette,
+  MapPin,
+  Upload,
+  Image as ImageIcon
 } from 'lucide-react';
 
 export const StaffModerationPortal: React.FC = () => {
@@ -46,6 +52,10 @@ export const StaffModerationPortal: React.FC = () => {
     togglePrintArchived,
     restoreAllWallArchives,
     restoreAllPrintArchives,
+    currentUser,
+    openLoginModal,
+    users,
+    switchAccount,
   } = useApp();
 
   const [activeSubTab, setActiveSubTab] = useState<'moderation' | 'private_vault' | 'archive_vault' | 'settings' | 'super_admin'>(
@@ -60,6 +70,17 @@ export const StaffModerationPortal: React.FC = () => {
   // Editing church settings
   const [settingsForm, setSettingsForm] = useState<Church>(currentChurch);
   const [settingsSaved, setSettingsSaved] = useState(false);
+
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setSettingsForm((prev) => ({ ...prev, logoUrl: reader.result as string }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   // New Church Modal (Super Admin)
   const [showAddChurchModal, setShowAddChurchModal] = useState(false);
@@ -104,6 +125,7 @@ export const StaffModerationPortal: React.FC = () => {
         autoApproveHighScores: true,
         enablePraiseUpdates: true,
         defaultPrintColumns: 2,
+        defaultWallLayout: 'grid',
       },
     });
 
@@ -112,6 +134,71 @@ export const StaffModerationPortal: React.FC = () => {
     setNewChurchPastor('');
     setNewChurchEmail('');
   };
+
+  // Special Access Gate: Pastors and staff special access
+  const isAuthorizedStaff =
+    activeRole === 'church_staff' ||
+    activeRole === 'super_admin' ||
+    isImpersonating ||
+    currentUser?.role === 'church_staff' ||
+    currentUser?.role === 'super_admin';
+
+  if (!isAuthorizedStaff) {
+    return (
+      <div className="max-w-3xl mx-auto px-4 py-12">
+        <div className="bg-white rounded-2xl p-8 border border-stone-200 shadow-xs text-center space-y-4">
+          <div className="w-16 h-16 rounded-2xl bg-blue-50 text-blue-700 flex items-center justify-center mx-auto border border-blue-200">
+            <ShieldCheck className="w-8 h-8 text-blue-600" />
+          </div>
+
+          <h2 className="font-serif-church text-2xl font-bold text-stone-900">
+            Pastoral & Staff Care Portal
+          </h2>
+
+          <p className="text-stone-600 text-sm max-w-lg mx-auto leading-relaxed">
+            This module contains confidential pastoral prayer requests, community moderation queues, bulletin publication tools, and church administrative settings. Access is restricted to pastors, ordained elders, and authorized church staff.
+          </p>
+
+          <div className="bg-stone-50 border border-stone-200 rounded-xl p-4 text-xs text-stone-700 max-w-md mx-auto text-left space-y-2">
+            <div className="font-semibold text-stone-900">Special Staff Privileges:</div>
+            <div className="flex items-center gap-2">
+              <Lock className="w-3.5 h-3.5 text-stone-500" />
+              <span>Confidential Prayer Vault (Staff-only pastoral counseling needs)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
+              <span>AI Content Safety Moderation & Flag Review</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Printer className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Sunday Bulletin Publishing & Archiving</span>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+            <button
+              onClick={() => openLoginModal('staff')}
+              className="w-full sm:w-auto px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-xs cursor-pointer flex items-center justify-center gap-2"
+            >
+              <KeyRound className="w-4 h-4" />
+              <span>Sign In with Staff Password</span>
+            </button>
+
+            <button
+              onClick={() => {
+                const pastor = users.find((u) => u.role === 'church_staff' && u.churchId === currentChurch.id) || users[0];
+                if (pastor) switchAccount(pastor.id);
+              }}
+              className="w-full sm:w-auto px-5 py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-lg text-xs font-semibold cursor-pointer flex items-center justify-center gap-2"
+            >
+              <Sparkles className="w-4 h-4 text-amber-600" />
+              <span>Quick Demo: Switch to Pastor David Matthews</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
@@ -777,67 +864,317 @@ export const StaffModerationPortal: React.FC = () => {
             )}
           </div>
 
+          {/* SECTION 1: CHURCH LOGO & COLOR THEME */}
+          <div className="bg-stone-50 rounded-xl p-5 border border-stone-200 space-y-4">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-stone-900 uppercase tracking-wider flex items-center gap-2">
+                <ImageIcon className="w-4 h-4 text-[#4eb8b9]" />
+                <span>Church Logo & Branding</span>
+              </label>
+              <span className="text-[11px] text-stone-400">
+                Shown in Prayer Wall header, Sunday printed bulletins, and directory
+              </span>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center gap-5">
+              {/* Logo Preview */}
+              <div className="w-20 h-20 rounded-2xl overflow-hidden bg-white border-2 border-stone-200 flex items-center justify-center shrink-0 shadow-xs">
+                {settingsForm.logoUrl ? (
+                  <img
+                    src={settingsForm.logoUrl}
+                    alt="Logo Preview"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <ChurchIcon className="w-10 h-10 text-stone-400" />
+                )}
+              </div>
+
+              {/* Upload & URL Controls */}
+              <div className="flex-1 space-y-2 w-full text-xs">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <label className="flex items-center gap-2 px-3.5 py-1.5 bg-stone-900 hover:bg-stone-800 text-white rounded-lg text-xs font-semibold shadow-xs cursor-pointer transition-all">
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>Upload Logo from Computer</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleLogoUpload}
+                      className="hidden"
+                    />
+                  </label>
+
+                  {settingsForm.logoUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setSettingsForm({ ...settingsForm, logoUrl: '' })}
+                      className="px-3 py-1.5 text-xs text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-lg cursor-pointer"
+                    >
+                      Remove Logo
+                    </button>
+                  )}
+                </div>
+
+                <input
+                  type="url"
+                  value={settingsForm.logoUrl || ''}
+                  onChange={(e) => setSettingsForm({ ...settingsForm, logoUrl: e.target.value })}
+                  placeholder="Or enter public logo image URL (https://...)"
+                  className="w-full px-3 py-1.5 text-xs rounded-lg border border-stone-300 bg-white focus:outline-none focus:ring-2 focus:ring-[#4eb8b9]"
+                />
+              </div>
+            </div>
+
+            {/* COLOR THEME SELECTOR */}
+            <div className="border-t border-stone-200/80 pt-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-stone-900 uppercase tracking-wider flex items-center gap-2">
+                  <Palette className="w-4 h-4 text-[#c219b0]" />
+                  <span>Church Color Theme</span>
+                </label>
+                <span className="text-[11px] text-stone-500">
+                  Default: <strong className="text-[#4eb8b9]">#4eb8b9 Teal</strong> base + <strong className="text-[#c219b0]">#c219b0 Pink</strong> accent
+                </span>
+              </div>
+
+              {/* Preset Palettes */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                {PRESET_THEMES.map((theme) => {
+                  const isSelected = settingsForm.themeColor === theme.id;
+                  return (
+                    <button
+                      key={theme.id}
+                      type="button"
+                      onClick={() =>
+                        setSettingsForm({
+                          ...settingsForm,
+                          themeColor: theme.id as ChurchThemeColor,
+                          primaryColor: theme.primary,
+                          accentColor: theme.accent,
+                        })
+                      }
+                      className={`text-left p-2.5 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between ${
+                        isSelected
+                          ? 'border-stone-900 bg-white shadow-xs ring-1 ring-stone-900/20'
+                          : 'border-stone-200 hover:border-stone-300 bg-white/70'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-xs font-bold text-stone-900 flex items-center gap-1">
+                          <span>{theme.name}</span>
+                          {theme.tag && (
+                            <span className="bg-[#4eb8b9]/20 text-[#1e6a6b] text-[9px] font-bold px-1.5 py-0.2 rounded">
+                              {theme.tag}
+                            </span>
+                          )}
+                        </span>
+                        {isSelected && <Check className="w-3.5 h-3.5 text-stone-900" />}
+                      </div>
+
+                      <div className="flex items-center gap-1 mb-1">
+                        <div
+                          className="h-4 flex-1 rounded-sm border border-black/10"
+                          style={{ backgroundColor: theme.primary }}
+                        />
+                        <div
+                          className="h-4 w-7 rounded-sm border border-black/10"
+                          style={{ backgroundColor: theme.accent }}
+                        />
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Custom Hex Pickers */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                <div className="bg-white p-3 rounded-lg border border-stone-200 space-y-1">
+                  <label className="block text-xs font-semibold text-stone-700">
+                    Base Color (Primary Buttons & Headers)
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={settingsForm.primaryColor || '#4eb8b9'}
+                      onChange={(e) =>
+                        setSettingsForm({
+                          ...settingsForm,
+                          themeColor: 'custom',
+                          primaryColor: e.target.value,
+                        })
+                      }
+                      className="w-8 h-8 rounded border border-stone-300 p-0.5 cursor-pointer bg-white"
+                    />
+                    <input
+                      type="text"
+                      value={settingsForm.primaryColor || '#4eb8b9'}
+                      onChange={(e) =>
+                        setSettingsForm({
+                          ...settingsForm,
+                          themeColor: 'custom',
+                          primaryColor: e.target.value,
+                        })
+                      }
+                      className="flex-1 px-2.5 py-1 text-xs font-mono rounded border border-stone-300 uppercase"
+                    />
+                  </div>
+                </div>
+
+                <div className="bg-white p-3 rounded-lg border border-stone-200 space-y-1">
+                  <label className="block text-xs font-semibold text-stone-700">
+                    Accent Color (Urgent Flags & Prayer Counts)
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={settingsForm.accentColor || '#c219b0'}
+                      onChange={(e) =>
+                        setSettingsForm({
+                          ...settingsForm,
+                          themeColor: 'custom',
+                          accentColor: e.target.value,
+                        })
+                      }
+                      className="w-8 h-8 rounded border border-stone-300 p-0.5 cursor-pointer bg-white"
+                    />
+                    <input
+                      type="text"
+                      value={settingsForm.accentColor || '#c219b0'}
+                      onChange={(e) =>
+                        setSettingsForm({
+                          ...settingsForm,
+                          themeColor: 'custom',
+                          accentColor: e.target.value,
+                        })
+                      }
+                      className="flex-1 px-2.5 py-1 text-xs font-mono rounded border border-stone-300 uppercase"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* SECTION 2: NAME, CONTACT & ADDRESS */}
+          <div className="space-y-4">
+            <span className="text-xs font-bold text-stone-900 uppercase tracking-wider block flex items-center gap-1.5">
+              <MapPin className="w-4 h-4 text-[#4eb8b9]" />
+              <span>Church Contact & Physical Address</span>
+            </span>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+              <div className="space-y-1">
+                <label className="font-semibold text-stone-700">Church Official Name</label>
+                <input
+                  type="text"
+                  value={settingsForm.name}
+                  onChange={(e) => setSettingsForm({ ...settingsForm, name: e.target.value })}
+                  className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-stone-900"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-semibold text-stone-700">Denomination / Tagline</label>
+                <input
+                  type="text"
+                  value={settingsForm.denomination}
+                  onChange={(e) => setSettingsForm({ ...settingsForm, denomination: e.target.value })}
+                  className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-stone-900"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-semibold text-stone-700">Senior Pastor / Minister</label>
+                <input
+                  type="text"
+                  value={settingsForm.pastorName}
+                  onChange={(e) => setSettingsForm({ ...settingsForm, pastorName: e.target.value })}
+                  className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-stone-900"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-semibold text-stone-700">Pastoral Care Contact Email</label>
+                <input
+                  type="email"
+                  value={settingsForm.contactEmail}
+                  onChange={(e) => setSettingsForm({ ...settingsForm, contactEmail: e.target.value })}
+                  className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-stone-900"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-semibold text-stone-700">Phone</label>
+                <input
+                  type="text"
+                  value={settingsForm.phone}
+                  onChange={(e) => setSettingsForm({ ...settingsForm, phone: e.target.value })}
+                  className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-stone-900"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-semibold text-stone-700">Website URL</label>
+                <input
+                  type="url"
+                  value={settingsForm.websiteUrl}
+                  onChange={(e) => setSettingsForm({ ...settingsForm, websiteUrl: e.target.value })}
+                  className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-stone-900"
+                />
+              </div>
+            </div>
+
+            {/* Address fields */}
+            <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 space-y-3 text-xs">
+              <span className="font-bold text-stone-800 block">Physical Location:</span>
+              <div className="space-y-1">
+                <label className="font-semibold text-stone-700">Street Address</label>
+                <input
+                  type="text"
+                  value={settingsForm.address}
+                  onChange={(e) => setSettingsForm({ ...settingsForm, address: e.target.value })}
+                  placeholder="e.g. 4200 Oak Lawn Ave"
+                  className="w-full px-3 py-2 bg-white border border-stone-200 rounded-lg text-stone-900"
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <label className="font-semibold text-stone-700">City</label>
+                  <input
+                    type="text"
+                    value={settingsForm.city}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, city: e.target.value })}
+                    className="w-full px-3 py-2 bg-white border border-stone-200 rounded-lg text-stone-900"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-semibold text-stone-700">State</label>
+                  <input
+                    type="text"
+                    value={settingsForm.state}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, state: e.target.value })}
+                    className="w-full px-3 py-2 bg-white border border-stone-200 rounded-lg text-stone-900"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-semibold text-stone-700">Zip Code</label>
+                  <input
+                    type="text"
+                    value={settingsForm.zipCode || ''}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, zipCode: e.target.value })}
+                    placeholder="75219"
+                    className="w-full px-3 py-2 bg-white border border-stone-200 rounded-lg text-stone-900"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* SECTION 3: MESSAGING & SCRIPTURE */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-            <div className="space-y-1">
-              <label className="font-semibold text-stone-700">Church Name</label>
-              <input
-                type="text"
-                value={settingsForm.name}
-                onChange={(e) => setSettingsForm({ ...settingsForm, name: e.target.value })}
-                className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-stone-900"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="font-semibold text-stone-700">Denomination / Tagline</label>
-              <input
-                type="text"
-                value={settingsForm.denomination}
-                onChange={(e) => setSettingsForm({ ...settingsForm, denomination: e.target.value })}
-                className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-stone-900"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="font-semibold text-stone-700">Pastor Name</label>
-              <input
-                type="text"
-                value={settingsForm.pastorName}
-                onChange={(e) => setSettingsForm({ ...settingsForm, pastorName: e.target.value })}
-                className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-stone-900"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="font-semibold text-stone-700">Pastoral Care Contact Email</label>
-              <input
-                type="email"
-                value={settingsForm.contactEmail}
-                onChange={(e) => setSettingsForm({ ...settingsForm, contactEmail: e.target.value })}
-                className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-stone-900"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="font-semibold text-stone-700">Phone</label>
-              <input
-                type="text"
-                value={settingsForm.phone}
-                onChange={(e) => setSettingsForm({ ...settingsForm, phone: e.target.value })}
-                className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-stone-900"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="font-semibold text-stone-700">Website URL</label>
-              <input
-                type="url"
-                value={settingsForm.websiteUrl}
-                onChange={(e) => setSettingsForm({ ...settingsForm, websiteUrl: e.target.value })}
-                className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-stone-900"
-              />
-            </div>
-
             <div className="space-y-1 md:col-span-2">
               <label className="font-semibold text-stone-700">Welcome Wall Message</label>
               <textarea
@@ -917,9 +1254,13 @@ export const StaffModerationPortal: React.FC = () => {
           <div className="pt-2 flex justify-end">
             <button
               type="submit"
-              className="px-6 py-2 bg-stone-900 hover:bg-stone-800 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
+              className="px-6 py-2.5 bg-stone-900 hover:bg-stone-800 text-white rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-2"
+              style={{
+                backgroundColor: settingsForm.primaryColor || '#4eb8b9',
+              }}
             >
-              Save Church Profile
+              <Save className="w-4 h-4" />
+              <span>Save Church Profile & Branding</span>
             </button>
           </div>
         </form>

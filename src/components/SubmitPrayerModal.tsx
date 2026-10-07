@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { VisibilityType, RequestCategory } from '../types';
+import { useSpeechToText } from '../hooks/useSpeechToText';
 import {
   X,
   Lock,
@@ -13,7 +14,18 @@ import {
   AlertCircle,
   CheckCircle2,
   Phone,
-  LifeBuoy
+  LifeBuoy,
+  Mic,
+  MicOff,
+  Volume2,
+  Square,
+  Play,
+  Pause,
+  RotateCcw,
+  Check,
+  Wand2,
+  RefreshCw,
+  Info
 } from 'lucide-react';
 
 const CATEGORIES: RequestCategory[] = [
@@ -34,18 +46,132 @@ export const SubmitPrayerModal: React.FC = () => {
     setSubmitModalOpen,
     addPrayerRequest,
     isModerating,
+    currentUser,
   } = useApp();
 
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
-  const [requesterName, setRequesterName] = useState('');
-  const [requesterEmail, setRequesterEmail] = useState('');
-  const [requesterPhone, setRequesterPhone] = useState('');
+  const [requesterName, setRequesterName] = useState(currentUser?.name || '');
+  const [requesterEmail, setRequesterEmail] = useState(currentUser?.email || '');
+  const [requesterPhone, setRequesterPhone] = useState(currentUser?.phone || '');
   const [isAnonymous, setIsAnonymous] = useState(false);
   const [visibility, setVisibility] = useState<VisibilityType>('church');
   const [category, setCategory] = useState<RequestCategory>('Health & Healing');
   const [isUrgent, setIsUrgent] = useState(false);
   
+  // Voice dictation state
+  const {
+    isSupported: isSpeechSupported,
+    isListening,
+    isPaused,
+    isTranscribing,
+    transcript,
+    interimTranscript,
+    audioLevel,
+    duration,
+    error: speechError,
+    startListening,
+    stopListening,
+    pauseListening,
+    resumeListening,
+    resetTranscript,
+  } = useSpeechToText();
+
+  const [voicePanelOpen, setVoicePanelOpen] = useState(false);
+  const [dictationTarget, setDictationTarget] = useState<'content' | 'title' | 'both'>('content');
+  const [dictationMode, setDictationMode] = useState<'append' | 'replace'>('append');
+  const [voiceNotification, setVoiceNotification] = useState<string | null>(null);
+
+  // Helper: capitalize sentences and clean transcript
+  const formatSpokenPrayer = (rawText: string): string => {
+    if (!rawText) return '';
+    let text = rawText.trim();
+    // Capitalize first character
+    text = text.charAt(0).toUpperCase() + text.slice(1);
+    // Capitalize after periods, question marks, exclamation marks
+    text = text.replace(/([.?!]\s+)([a-z])/g, (_, p1, p2) => p1 + p2.toUpperCase());
+    return text;
+  };
+
+  // Helper: derive title from spoken prayer content
+  const extractTitleFromContent = (text: string): string => {
+    if (!text.trim()) return '';
+    let clean = text.trim();
+    // Strip common conversational starters
+    clean = clean.replace(/^(please pray for|praying for|i ask for prayer for|pray for|prayer request for|can you pray for|i need prayer for)\s+/i, '');
+    // Take first sentence or first 7 words
+    const firstSentence = clean.split(/[.?!]/)[0].trim();
+    const words = firstSentence.split(/\s+/);
+    if (words.length <= 7) {
+      return words.join(' ').charAt(0).toUpperCase() + words.join(' ').slice(1);
+    }
+    return words.slice(0, 7).join(' ').charAt(0).toUpperCase() + words.slice(0, 7).join(' ').slice(1);
+  };
+
+  const handleStartVoice = async (target: 'content' | 'title' | 'both' = 'content') => {
+    setDictationTarget(target);
+    setVoicePanelOpen(true);
+    resetTranscript();
+    await startListening();
+  };
+
+  const handleStopAndApplyVoice = async () => {
+    const finalSpoken = await stopListening();
+    const spokenText = (finalSpoken || transcript || interimTranscript).trim();
+    if (!spokenText) {
+      setVoicePanelOpen(false);
+      return;
+    }
+
+    const cleanSpoken = formatSpokenPrayer(spokenText);
+
+    if (dictationTarget === 'title') {
+      setTitle((prev) => (dictationMode === 'append' && prev ? `${prev} - ${cleanSpoken}` : cleanSpoken));
+      setVoiceNotification('Spoken title inserted into prayer request!');
+    } else if (dictationTarget === 'content') {
+      setContent((prev) => (dictationMode === 'append' && prev ? `${prev ? prev + '\n\n' : ''}${cleanSpoken}` : cleanSpoken));
+      if (!title.trim()) {
+        const autoTitle = extractTitleFromContent(cleanSpoken);
+        if (autoTitle) {
+          setTitle(autoTitle);
+        }
+      }
+      setVoiceNotification('Spoken prayer recorded and applied to details!');
+    } else if (dictationTarget === 'both') {
+      const autoTitle = extractTitleFromContent(cleanSpoken);
+      if (autoTitle) setTitle(autoTitle);
+      setContent(cleanSpoken);
+      setVoiceNotification('Spoken prayer recorded and title generated!');
+    }
+
+    setTimeout(() => setVoiceNotification(null), 3500);
+    setVoicePanelOpen(false);
+  };
+
+  const handleCancelVoice = async () => {
+    if (isListening) {
+      await stopListening();
+    }
+    resetTranscript();
+    setVoicePanelOpen(false);
+  };
+
+  const handleAutoGenerateTitle = () => {
+    if (!content.trim()) return;
+    const derived = extractTitleFromContent(content);
+    if (derived) {
+      setTitle(derived);
+      setVoiceNotification(`Generated title: "${derived}"`);
+      setTimeout(() => setVoiceNotification(null), 3000);
+    }
+  };
+
+  const formatTimer = (seconds: number) => {
+    const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+    const s = (seconds % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+  };
+
   // Submission response status
   const [submitResult, setSubmitResult] = useState<{
     status: 'success' | 'flagged' | 'crisis' | 'error';
@@ -122,6 +248,11 @@ export const SubmitPrayerModal: React.FC = () => {
   };
 
   const handleResetAndClose = () => {
+    if (isListening) {
+      stopListening();
+    }
+    resetTranscript();
+    setVoicePanelOpen(false);
     setTitle('');
     setContent('');
     setRequesterName('');
@@ -136,19 +267,19 @@ export const SubmitPrayerModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-950/60 backdrop-blur-xs overflow-y-auto no-print">
-      <div className="bg-white rounded-2xl max-w-xl w-full shadow-2xl border border-stone-200 overflow-hidden my-8 animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-stone-950/60 backdrop-blur-xs overflow-y-auto no-print">
+      <div className="bg-white rounded-2xl max-w-xl w-full shadow-2xl border border-stone-200 overflow-hidden my-auto sm:my-6 animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[96vh]">
         {/* Modal Header */}
-        <div className="bg-stone-900 text-white px-6 py-4 flex items-center justify-between">
+        <div className="bg-stone-900 text-white px-4 sm:px-6 py-3.5 sm:py-4 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
               <Heart className="w-4 h-4 fill-amber-400 text-amber-400" />
             </div>
             <div>
-              <h2 className="font-serif-church text-lg font-bold">
+              <h2 className="font-serif-church text-base sm:text-lg font-bold">
                 Submit a Prayer Request
               </h2>
-              <p className="text-xs text-stone-400">
+              <p className="text-[11px] sm:text-xs text-stone-400 line-clamp-1">
                 {currentChurch.name} • How can our church family pray for you?
               </p>
             </div>
@@ -228,6 +359,292 @@ export const SubmitPrayerModal: React.FC = () => {
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
+            {currentUser && (
+              <div className="p-2.5 bg-amber-50/70 border border-amber-200/80 rounded-xl flex items-center justify-between text-xs text-amber-900">
+                <span className="flex items-center gap-1.5 font-medium">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Logged in as <strong>{currentUser.name}</strong></span>
+                </span>
+                <span className="text-[10px] text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded">
+                  Saved to your Member Prayer History
+                </span>
+              </div>
+            )}
+
+            {/* Voice Notification Toast */}
+            {voiceNotification && (
+              <div className="p-2.5 bg-emerald-50 border border-emerald-300 rounded-xl text-xs font-semibold text-emerald-900 flex items-center justify-between animate-in fade-in duration-200">
+                <span className="flex items-center gap-2">
+                  <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>{voiceNotification}</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setVoiceNotification(null)}
+                  className="text-emerald-700 hover:text-emerald-900 p-0.5"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
+            {/* Voice Dictation Callout Bar */}
+            {!voicePanelOpen && (
+              <div className="bg-gradient-to-r from-amber-50/90 via-orange-50/80 to-amber-50/90 border border-amber-200/90 rounded-xl p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-amber-500 text-white flex items-center justify-center shadow-xs shrink-0">
+                    <Mic className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-stone-900 flex items-center gap-1.5">
+                      <span>Speak Your Prayer (Microphone Speech-to-Text)</span>
+                      <span className="bg-amber-200/80 text-amber-950 text-[9px] font-extrabold px-1.5 py-0.2 rounded-full uppercase tracking-wider">
+                        New
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-stone-500">
+                      Record naturally using your voice — instant real-time transcription.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleStartVoice(content ? 'title' : 'content')}
+                  className="w-full sm:w-auto px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer shrink-0"
+                >
+                  <Mic className="w-3.5 h-3.5" />
+                  <span>Record with Microphone</span>
+                </button>
+              </div>
+            )}
+
+            {/* EXPANDED LIVE VOICE RECORDING CONSOLE */}
+            {voicePanelOpen && (
+              <div className="bg-stone-900 text-white rounded-xl p-4 border border-stone-800 space-y-3.5 shadow-xl animate-in fade-in duration-150">
+                {/* Console Header */}
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-800 pb-2.5">
+                  <div className="flex items-center gap-2.5">
+                    {/* Pulsing Recording Indicator */}
+                    <div className="flex items-center gap-1.5">
+                      <span className="relative flex h-3 w-3">
+                        {isListening && !isPaused && (
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                        )}
+                        <span
+                          className={`relative inline-flex rounded-full h-3 w-3 ${
+                            isListening && !isPaused
+                              ? 'bg-rose-500'
+                              : isPaused
+                              ? 'bg-amber-400'
+                              : isTranscribing
+                              ? 'bg-purple-400'
+                              : 'bg-stone-500'
+                          }`}
+                        ></span>
+                      </span>
+                      <span className="text-xs font-bold uppercase tracking-wider font-mono">
+                        {isListening && !isPaused
+                          ? 'Listening...'
+                          : isPaused
+                          ? 'Paused'
+                          : isTranscribing
+                          ? 'Transcribing Audio...'
+                          : 'Microphone Ready'}
+                      </span>
+                    </div>
+
+                    {/* Timer */}
+                    <span className="font-mono text-xs px-2 py-0.5 rounded bg-stone-800 text-stone-200 border border-stone-700">
+                      {formatTimer(duration)}
+                    </span>
+                  </div>
+
+                  {/* Dictation Target Selector */}
+                  <div className="flex items-center gap-1 text-[11px]">
+                    <span className="text-stone-400 mr-1 hidden sm:inline">Record into:</span>
+                    <div className="bg-stone-800 p-0.5 rounded-lg border border-stone-700 flex items-center">
+                      <button
+                        type="button"
+                        onClick={() => setDictationTarget('content')}
+                        className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-all cursor-pointer ${
+                          dictationTarget === 'content'
+                            ? 'bg-amber-500 text-stone-950 font-bold'
+                            : 'text-stone-300 hover:text-white'
+                        }`}
+                      >
+                        Prayer Details
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDictationTarget('title')}
+                        className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-all cursor-pointer ${
+                          dictationTarget === 'title'
+                            ? 'bg-amber-500 text-stone-950 font-bold'
+                            : 'text-stone-300 hover:text-white'
+                        }`}
+                      >
+                        Title
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDictationTarget('both')}
+                        className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-all cursor-pointer ${
+                          dictationTarget === 'both'
+                            ? 'bg-amber-500 text-stone-950 font-bold'
+                            : 'text-stone-300 hover:text-white'
+                        }`}
+                      >
+                        Both (Auto-Fill)
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Live Microphone Sound Bars Visualizer */}
+                <div className="flex items-center justify-between gap-2 h-7 bg-stone-950/70 rounded-lg px-3 border border-stone-800/80">
+                  <div className="flex items-center gap-1.5 text-stone-400 text-[10px] shrink-0">
+                    <Volume2
+                      className={`w-3.5 h-3.5 ${
+                        audioLevel > 5 ? 'text-amber-400' : 'text-stone-500'
+                      }`}
+                    />
+                    <span className="hidden sm:inline">Mic Volume:</span>
+                  </div>
+
+                  <div className="flex items-center gap-1 flex-1 justify-center h-full py-1">
+                    {Array.from({ length: 18 }).map((_, i) => {
+                      const curve = Math.sin((i / 17) * Math.PI) * 0.7 + 0.3;
+                      const barHeight =
+                        isListening && !isPaused
+                          ? Math.max(15, Math.min(100, Math.round(audioLevel * curve * 1.3)))
+                          : 10;
+                      return (
+                        <div
+                          key={i}
+                          className={`w-1 rounded-full transition-all duration-75 ${
+                            isListening && !isPaused
+                              ? audioLevel > 18
+                                ? 'bg-amber-400'
+                                : 'bg-amber-500/70'
+                              : 'bg-stone-700'
+                          }`}
+                          style={{ height: `${barHeight}%` }}
+                        />
+                      );
+                    })}
+                  </div>
+
+                  <span className="text-[10px] text-stone-400 font-mono w-8 text-right shrink-0">
+                    {audioLevel}%
+                  </span>
+                </div>
+
+                {/* Real-Time Live Transcription Box */}
+                <div className="bg-stone-950/90 rounded-xl p-3 border border-stone-800 text-xs min-h-[70px] max-h-36 overflow-y-auto leading-relaxed">
+                  {transcript || interimTranscript ? (
+                    <div className="text-stone-100 font-serif-church text-sm">
+                      <span>{transcript}</span>
+                      {interimTranscript && (
+                        <span className="text-amber-300 italic bg-amber-950/70 px-1 rounded ml-1 animate-pulse font-sans">
+                          {interimTranscript}
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-stone-400 italic">
+                      {isListening && !isPaused
+                        ? 'Listening... speak your prayer clearly into the microphone (e.g. "Lord, please heal my husband\'s heart condition and give our family peace...")'
+                        : isPaused
+                        ? 'Recording paused. Click Resume when you are ready to continue.'
+                        : isTranscribing
+                        ? 'Transcribing recorded audio with AI...'
+                        : 'Click Start Speaking to begin voice dictation.'}
+                    </p>
+                  )}
+                </div>
+
+                {/* Error Banner */}
+                {speechError && (
+                  <div className="p-2.5 bg-rose-950/80 border border-rose-800 text-rose-200 text-xs rounded-lg flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <span className="font-semibold block">Microphone Notice:</span>
+                      <p className="text-[11px] leading-tight text-rose-300">{speechError}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Recording Controls */}
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-stone-800 text-xs">
+                  <div className="flex items-center gap-2">
+                    {isListening ? (
+                      isPaused ? (
+                        <button
+                          type="button"
+                          onClick={resumeListening}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-stone-800 hover:bg-stone-700 text-amber-300 font-semibold rounded-lg transition-colors cursor-pointer border border-stone-700"
+                        >
+                          <Play className="w-3.5 h-3.5 fill-current" />
+                          <span>Resume</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={pauseListening}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-stone-800 hover:bg-stone-700 text-stone-200 font-semibold rounded-lg transition-colors cursor-pointer border border-stone-700"
+                        >
+                          <Pause className="w-3.5 h-3.5" />
+                          <span>Pause</span>
+                        </button>
+                      )
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => startListening()}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold rounded-lg transition-colors cursor-pointer"
+                      >
+                        <Play className="w-3.5 h-3.5 fill-current" />
+                        <span>Start Speaking</span>
+                      </button>
+                    )}
+
+                    {(transcript || interimTranscript) && (
+                      <button
+                        type="button"
+                        onClick={resetTranscript}
+                        className="flex items-center gap-1 px-2.5 py-1.5 text-stone-400 hover:text-stone-200 text-[11px] rounded transition-colors cursor-pointer"
+                        title="Clear recorded transcript"
+                      >
+                        <RotateCcw className="w-3 h-3" />
+                        <span>Clear</span>
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleCancelVoice}
+                      className="px-3 py-1.5 text-stone-400 hover:text-stone-200 text-xs transition-colors cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleStopAndApplyVoice}
+                      disabled={!transcript.trim() && !interimTranscript.trim() && !isListening}
+                      className="flex items-center gap-1.5 px-4 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-stone-950 font-bold rounded-lg transition-all shadow-xs cursor-pointer disabled:opacity-40"
+                    >
+                      <Check className="w-3.5 h-3.5 stroke-[3]" />
+                      <span>Done & Apply to Prayer</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Requester Name & Anonymous Toggle */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
@@ -256,11 +673,42 @@ export const SubmitPrayerModal: React.FC = () => {
               )}
             </div>
 
-            {/* Prayer Title */}
+            {/* Prayer Title Field with Mic Button and Auto-Title Helper */}
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-stone-700">
-                Prayer Title <span className="text-rose-500">*</span>
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-stone-700">
+                  Prayer Title <span className="text-rose-500">*</span>
+                </label>
+
+                <div className="flex items-center gap-1.5">
+                  {content.trim() && !title.trim() && (
+                    <button
+                      type="button"
+                      onClick={handleAutoGenerateTitle}
+                      className="text-[11px] text-amber-700 hover:text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-2 py-0.5 rounded font-medium flex items-center gap-1 cursor-pointer transition-colors"
+                      title="Auto-derive title from prayer details"
+                    >
+                      <Wand2 className="w-3 h-3 text-amber-600" />
+                      <span>Auto-Generate Title</span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => handleStartVoice('title')}
+                    className={`text-[11px] px-2 py-0.5 rounded font-medium flex items-center gap-1 cursor-pointer transition-colors ${
+                      voicePanelOpen && dictationTarget === 'title'
+                        ? 'bg-rose-100 text-rose-800 border border-rose-300 font-bold'
+                        : 'bg-stone-100 hover:bg-stone-200 text-stone-700 border border-stone-300'
+                    }`}
+                    title="Record title using microphone"
+                  >
+                    <Mic className="w-3 h-3 text-amber-600" />
+                    <span>Dictate Title</span>
+                  </button>
+                </div>
+              </div>
+
               <input
                 type="text"
                 required
@@ -271,15 +719,32 @@ export const SubmitPrayerModal: React.FC = () => {
               />
             </div>
 
-            {/* Request Details */}
+            {/* Request Details Field with Mic Button */}
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-stone-700">
-                Prayer Details <span className="text-rose-500">*</span>
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-stone-700">
+                  Prayer Details <span className="text-rose-500">*</span>
+                </label>
+
+                <button
+                  type="button"
+                  onClick={() => handleStartVoice('content')}
+                  className={`text-[11px] px-2.5 py-0.5 rounded font-medium flex items-center gap-1 cursor-pointer transition-colors ${
+                    voicePanelOpen && dictationTarget === 'content'
+                      ? 'bg-rose-100 text-rose-800 border border-rose-300 font-bold'
+                      : 'bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300'
+                  }`}
+                  title="Record prayer details using microphone"
+                >
+                  <Mic className="w-3 h-3 text-amber-600" />
+                  <span>Dictate Details (Voice)</span>
+                </button>
+              </div>
+
               <textarea
                 required
                 rows={4}
-                placeholder="Share how our church family can stand with you in prayer..."
+                placeholder="Share how our church family can stand with you in prayer (type or click microphone to speak)..."
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 className="w-full text-sm px-3.5 py-2 rounded-lg border border-stone-200 bg-stone-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500"

@@ -13,21 +13,29 @@ import { StaffModerationPortal } from './components/StaffModerationPortal';
 import { GlobalPrayerWall } from './components/GlobalPrayerWall';
 import { WebsiteEmbedCenter } from './components/WebsiteEmbedCenter';
 import { SubmitPrayerModal } from './components/SubmitPrayerModal';
+import { ChurchDirectory } from './components/ChurchDirectory';
+import { MemberPrayerHistory } from './components/MemberPrayerHistory';
+import { AuthModal } from './components/AuthModal';
 import { Heart, Sparkles, Shield, Printer, Globe, Code } from 'lucide-react';
 
 const MainContent: React.FC = () => {
-  const { activeTab, currentChurch } = useApp();
+  const { activeTab, currentChurch, loginModalOpen, closeLoginModal } = useApp();
 
   return (
     <main className="min-h-screen pb-16">
       {activeTab === 'wall' && <PrayerWall />}
       {activeTab === 'bulletin' && <PrintableBulletinBuilder />}
       {activeTab === 'staff' && <StaffModerationPortal />}
+      {activeTab === 'directory' && <ChurchDirectory />}
+      {activeTab === 'my-prayers' && <MemberPrayerHistory />}
       {activeTab === 'global' && <GlobalPrayerWall />}
       {activeTab === 'embed' && <WebsiteEmbedCenter />}
 
       {/* Global Submit Prayer Modal */}
       <SubmitPrayerModal />
+
+      {/* User Login & Register Auth Modal */}
+      <AuthModal isOpen={loginModalOpen} onClose={closeLoginModal} />
     </main>
   );
 };
