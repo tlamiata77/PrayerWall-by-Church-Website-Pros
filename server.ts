@@ -321,6 +321,171 @@ ${JSON.stringify(items.map((it: any) => ({ id: it.id, name: it.requesterName || 
 });
 
 /**
+ * POST /api/batch-categorize-prayers
+ * AI-powered categorization and organization for imported prayer requests.
+ * Uses Gemini 3.8 Flash to classify requests into standard church categories
+ * (Health & Healing, Family & Relationships, Comfort & Grief, etc.) and
+ * refine raw text into polished card short statements.
+ */
+app.post('/api/batch-categorize-prayers', async (req: Request, res: Response) => {
+  try {
+    const { items = [] } = req.body;
+    if (!Array.isArray(items) || items.length === 0) {
+      res.status(400).json({ error: 'Items array is required' });
+      return;
+    }
+
+    const validCategories = [
+      'Health & Healing',
+      'Comfort & Grief',
+      'Family & Relationships',
+      'Spiritual Growth',
+      'Missions & Outreach',
+      'Praise & Thanksgiving',
+      'Guidance & Provision',
+      'General',
+    ];
+
+    const fallbackCategorize = (title: string, content: string) => {
+      const text = `${title} ${content}`.toLowerCase();
+      let category = 'General';
+      let isUrgent = false;
+      let isAnswered = false;
+
+      if (text.includes('heal') || text.includes('doctor') || text.includes('surger') || text.includes('cancer') || text.includes('hospital') || text.includes('pain') || text.includes('illness') || text.includes('medical') || text.includes('gi doctor') || text.includes('sick')) {
+        category = 'Health & Healing';
+      } else if (text.includes('grief') || text.includes('comfort') || text.includes('loss') || text.includes('pass') || text.includes('mourn') || text.includes('funeral') || text.includes('bereav')) {
+        category = 'Comfort & Grief';
+      } else if (text.includes('fam') || text.includes('mother') || text.includes('father') || text.includes('nephew') || text.includes('niece') || text.includes('marri') || text.includes('child') || text.includes('parent') || text.includes('spous') || text.includes('unspoken') || text.includes('travel')) {
+        category = 'Family & Relationships';
+      } else if (text.includes('spirit') || text.includes('faith') || text.includes('salvat') || text.includes('bibl') || text.includes('baptism') || text.includes('growth')) {
+        category = 'Spiritual Growth';
+      } else if (text.includes('miss') || text.includes('outreach') || text.includes('evangel') || text.includes('vbs') || text.includes('trip') || text.includes('communit')) {
+        category = 'Missions & Outreach';
+      } else if (text.includes('praise') || text.includes('thank') || text.includes('answer') || text.includes('testim') || text.includes('bless')) {
+        category = 'Praise & Thanksgiving';
+        isAnswered = true;
+      } else if (text.includes('guid') || text.includes('provis') || text.includes('job') || text.includes('finan') || text.includes('hous') || text.includes('career')) {
+        category = 'Guidance & Provision';
+      }
+
+      if (text.includes('urgent') || text.includes('icu') || text.includes('emergency') || text.includes('critical')) {
+        isUrgent = true;
+      }
+
+      // Generate a dignified 3-7 word short statement title
+      let refinedTitle = title.trim();
+      if (!refinedTitle || /^\d{4}[-/.]\d{1,2}/.test(refinedTitle) || refinedTitle.toLowerCase() === 'prayer request') {
+        const firstLine = (content.split('\n')[0] || content).trim();
+        refinedTitle = firstLine.length > 55 ? firstLine.substring(0, 52) + '...' : firstLine;
+      }
+
+      return { category, refinedTitle: refinedTitle || 'Prayer Request', isUrgent, isAnswered };
+    };
+
+    if (ai) {
+      try {
+        const prompt = `You are a pastor and ministry administrator organizing prayer requests for the church prayer wall.
+Categorize each request into exactly ONE of the following ministry categories:
+- 'Health & Healing' (surgeries, medical appointments like GI doctor, cancer, illness, physical recovery, pain)
+- 'Comfort & Grief' (loss of loved ones, bereavement, funerals, sorrow, mourning)
+- 'Family & Relationships' (family members like mother, nephew, children, marriage, family travel, unspoken family concerns)
+- 'Spiritual Growth' (faith, salvation, baptism, spiritual walk, prayer life)
+- 'Missions & Outreach' (mission trips, evangelism, community service, church outreach)
+- 'Praise & Thanksgiving' (answered prayers, celebrations, praise reports, gratitude)
+- 'Guidance & Provision' (finances, job search, housing, direction, discernment)
+- 'General' (other church needs)
+
+Also generate a respectful, concise 3 to 7 word short statement for each request's card title on the church wall (e.g. "GI Doctor Appointment", "Mother & Family Travel", "Hip Surgery Recovery").
+Do NOT use dates as the title.
+
+Input requests:
+${JSON.stringify(items.map((it: any) => ({
+  id: it.id,
+  requesterName: it.requesterName || 'Member',
+  title: it.title,
+  content: it.content,
+})))}
+`;
+
+        const response = await ai.models.generateContent({
+          model: 'gemini-3.8-flash',
+          contents: prompt,
+          config: {
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  id: { type: Type.STRING },
+                  category: {
+                    type: Type.STRING,
+                    description: 'One of the exact category names: Health & Healing, Comfort & Grief, Family & Relationships, Spiritual Growth, Missions & Outreach, Praise & Thanksgiving, Guidance & Provision, General',
+                  },
+                  refinedTitle: {
+                    type: Type.STRING,
+                    description: 'Respectful, concise 3 to 7 word short statement title for the card header',
+                  },
+                  isUrgent: {
+                    type: Type.BOOLEAN,
+                    description: 'True if acute emergency or critical illness',
+                  },
+                  isAnswered: {
+                    type: Type.BOOLEAN,
+                    description: 'True if praise report or answered prayer',
+                  },
+                },
+                required: ['id', 'category', 'refinedTitle'],
+              },
+            },
+          },
+        });
+
+        const jsonText = response.text?.trim() || '[]';
+        const parsed = JSON.parse(jsonText);
+        
+        // Sanitize categories
+        const sanitized = parsed.map((resItem: any) => {
+          let cat = resItem.category;
+          if (!validCategories.includes(cat)) {
+            cat = validCategories.find(c => c.toLowerCase() === (cat || '').toLowerCase()) || 'General';
+          }
+          return {
+            id: resItem.id,
+            category: cat,
+            refinedTitle: resItem.refinedTitle || 'Prayer Request',
+            isUrgent: Boolean(resItem.isUrgent),
+            isAnswered: Boolean(resItem.isAnswered),
+          };
+        });
+
+        res.json({ success: true, provider: 'gemini-3.8-flash', results: sanitized });
+        return;
+      } catch (err: any) {
+        console.warn('Gemini batch categorization error, falling back to heuristics:', err?.message || err);
+      }
+    }
+
+    // Heuristic Fallback
+    const results = items.map((it: any) => {
+      const fb = fallbackCategorize(it.title || '', it.content || '');
+      return {
+        id: it.id,
+        category: fb.category,
+        refinedTitle: fb.refinedTitle,
+        isUrgent: fb.isUrgent,
+        isAnswered: fb.isAnswered,
+      };
+    });
+
+    res.json({ success: true, provider: 'heuristic_engine', results });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Batch categorization failed' });
+  }
+});
+
+/**
  * POST /api/generate-encouragement
  * Generates a warm, uplifting scripture-themed encouragement note for a requester
  */

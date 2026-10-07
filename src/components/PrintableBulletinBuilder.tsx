@@ -1,8 +1,12 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { RequestCategory, PrayerRequest } from '../types';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
+import { isDateString } from '../utils/csvParser';
 import {
   Printer,
+  Download,
   Copy,
   Check,
   Sparkles,
@@ -28,7 +32,8 @@ import {
   Archive,
   ArchiveRestore,
   RotateCcw,
-  Upload
+  Upload,
+  LayoutGrid
 } from 'lucide-react';
 
 export const PrintableBulletinBuilder: React.FC = () => {
@@ -42,11 +47,14 @@ export const PrintableBulletinBuilder: React.FC = () => {
     restoreAllPrintArchives,
     togglePrintArchived,
     setImportModalOpen,
+    categorizePrayersWithAI,
+    isAICategorizing,
+    repairDateTitles,
   } = useApp();
 
   // Template / Layout selection
   // Presets specifically engineered for 50 to 100+ weekly requests
-  const [layoutMode, setLayoutMode] = useState<'columns_3' | 'columns_2' | 'columns_4' | 'table_ledger' | 'inline_flow' | 'columns_1'>('columns_3');
+  const [layoutMode, setLayoutMode] = useState<'columns_3' | 'columns_2' | 'columns_4' | 'table_ledger' | 'inline_flow' | 'columns_1'>('columns_2');
   
   // Customization Options
   const [customTitle, setCustomTitle] = useState(currentChurch.bulletinTitle || `${currentChurch.name} Weekly Prayer List`);
@@ -69,8 +77,8 @@ export const PrintableBulletinBuilder: React.FC = () => {
   const [archiveDaysSelection, setArchiveDaysSelection] = useState<number>(7);
 
   // Typography & Density controls for high volume
-  const [fontSize, setFontSize] = useState<'micro' | 'dense' | 'compact' | 'regular'>('dense');
-  const [spacing, setSpacing] = useState<'tight' | 'compact' | 'normal'>('tight');
+  const [fontSize, setFontSize] = useState<'micro' | 'dense' | 'compact' | 'regular'>('compact');
+  const [spacing, setSpacing] = useState<'tight' | 'compact' | 'normal'>('compact');
   const [useCondensedSummaries, setUseCondensedSummaries] = useState(true);
   
   // Category selection (all selected by default)
@@ -90,6 +98,8 @@ export const PrintableBulletinBuilder: React.FC = () => {
   const [editText, setEditText] = useState('');
   const [isPolishingAI, setIsPolishingAI] = useState(false);
   const [aiCompressedCount, setAiCompressedCount] = useState<number | null>(null);
+  const [isExportingPDF, setIsExportingPDF] = useState(false);
+  const [pdfProgressMessage, setPdfProgressMessage] = useState<string | null>(null);
 
   // High-Volume Presets
   const applyPreset = (preset: 'dense_3col' | 'ledger_table' | 'inline_flow' | 'pocket_4col' | 'standard_2col' | 'pastoral_care') => {
@@ -241,6 +251,99 @@ export const PrintableBulletinBuilder: React.FC = () => {
   };
 
   const pageFit = calculateEstimatedPages();
+
+  // Helper to extract clean dignified summary text without date strings
+  const getItemSummaryText = (item: PrayerRequest) => {
+    let summary = useCondensedSummaries && item.bulletinSummary ? item.bulletinSummary : item.title;
+    if (!summary || isDateString(summary)) {
+      summary = item.content && !isDateString(item.content) ? item.content : 'Prayer Request';
+    }
+    // Clean out bracketed class prefixes like [Joy] from display line
+    return summary.replace(/^\[[^\]]+\]\s*/, '').trim();
+  };
+
+  // High-Quality PDF Downloader using html2canvas & jsPDF
+  const handleDownloadPDF = async () => {
+    setIsExportingPDF(true);
+    setPdfProgressMessage('Preparing high-resolution PDF...');
+    try {
+      const element = document.querySelector('.printable-area') as HTMLElement;
+      if (!element) {
+        window.print();
+        return;
+      }
+
+      setPdfProgressMessage('Rendering print typography...');
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+        scrollX: 0,
+        scrollY: 0,
+        windowWidth: 1200,
+        onclone: (clonedDoc) => {
+          const el = clonedDoc.querySelector('.printable-area') as HTMLElement;
+          if (el) {
+            el.style.boxShadow = 'none';
+            el.style.transform = 'none';
+          }
+        },
+      });
+
+      setPdfProgressMessage('Compiling PDF pages...');
+      const imgData = canvas.toDataURL('image/jpeg', 0.96);
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'pt',
+        format: 'letter', // 612 x 792 pt
+      });
+
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = pdfWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pdfHeight;
+
+      while (heightLeft > 5) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pdfHeight;
+      }
+
+      const safeName = (currentChurch.name || 'Church').replace(/[^a-zA-Z0-9]/g, '_');
+      const dateStr = new Date().toISOString().split('T')[0];
+      pdf.save(`${safeName}_Sunday_Prayer_Bulletin_${dateStr}.pdf`);
+      setPdfProgressMessage('PDF Downloaded successfully!');
+      setTimeout(() => setPdfProgressMessage(null), 3500);
+    } catch (err) {
+      console.error('Error downloading PDF:', err);
+      window.print();
+    } finally {
+      setIsExportingPDF(false);
+    }
+  };
+
+  // AI Auto-Categorize Bulletin
+  const handleAICategorizeBulletin = async () => {
+    setIsPolishingAI(true);
+    try {
+      await categorizePrayersWithAI(printableRequests);
+      repairDateTitles();
+      setAiCompressedCount(printableRequests.length);
+      setTimeout(() => setAiCompressedCount(null), 4000);
+    } catch (e) {
+      console.warn('AI categorize error:', e);
+    } finally {
+      setIsPolishingAI(false);
+    }
+  };
 
   // Trigger Native Browser Print Dialog
   const handlePrint = () => {
@@ -425,10 +528,21 @@ export const PrintableBulletinBuilder: React.FC = () => {
               onClick={handleAIBulkCompress}
               disabled={isPolishingAI}
               className="flex items-center gap-1.5 px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-stone-950 rounded-lg text-xs font-bold transition-all cursor-pointer shadow-sm disabled:opacity-50"
-              title="AI condenses all 75 requests into concise 3-7 word prayer lines for maximum page compression"
+              title="AI condenses all requests into concise 3-7 word prayer lines for maximum page compression"
             >
               <Sparkles className={`w-3.5 h-3.5 ${isPolishingAI ? 'animate-spin' : ''}`} />
-              <span>{isPolishingAI ? 'AI Compressing 75...' : '⚡ AI Compress to 1-Liners'}</span>
+              <span>{isPolishingAI ? 'AI Compressing...' : '⚡ AI 1-Liners'}</span>
+            </button>
+
+            {/* AI Auto-Categorize Bulletin */}
+            <button
+              onClick={handleAICategorizeBulletin}
+              disabled={isPolishingAI || isAICategorizing}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-amber-700 hover:bg-amber-600 text-white rounded-lg text-xs font-bold transition-all cursor-pointer shadow-sm disabled:opacity-50"
+              title="AI organizes and categorizes all requests on this bulletin into their ministry categories"
+            >
+              <Sparkles className={`w-3.5 h-3.5 ${isPolishingAI || isAICategorizing ? 'animate-spin' : ''}`} />
+              <span>{isPolishingAI || isAICategorizing ? 'Categorizing...' : '✨ AI Organize Categories'}</span>
             </button>
 
             {/* Copy for Bulletin */}
@@ -438,19 +552,47 @@ export const PrintableBulletinBuilder: React.FC = () => {
               title="Copy formatted text to paste into Microsoft Word, Canva, or InDesign"
             >
               {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-stone-400" />}
-              <span>{copied ? 'Copied to Clipboard!' : 'Copy Text'}</span>
+              <span>{copied ? 'Copied!' : 'Copy Text'}</span>
             </button>
 
-            {/* Print / Save PDF */}
+            {/* Direct Download PDF Button */}
+            <button
+              onClick={handleDownloadPDF}
+              disabled={isExportingPDF}
+              className="flex items-center gap-2 px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold shadow-md transition-all cursor-pointer disabled:opacity-60"
+              title="Save & Download this Sunday Bulletin directly as a PDF document"
+            >
+              <Download className={`w-4 h-4 ${isExportingPDF ? 'animate-bounce' : ''}`} />
+              <span>{isExportingPDF ? 'Generating PDF...' : 'Download PDF'}</span>
+            </button>
+
+            {/* Print Bulletin */}
             <button
               onClick={handlePrint}
-              className="flex items-center gap-2 px-5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold shadow-md transition-all cursor-pointer"
+              className="flex items-center gap-2 px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold shadow-md transition-all cursor-pointer"
+              title="Open browser print dialog / save as PDF"
             >
               <Printer className="w-4 h-4" />
               <span>Print Bulletin</span>
             </button>
           </div>
         </div>
+
+        {/* Progress or Notification Banner */}
+        {pdfProgressMessage && (
+          <div className="bg-blue-950/90 border border-blue-400/60 text-blue-200 text-xs px-3.5 py-2.5 rounded-xl flex items-center justify-between gap-2 shadow-xs">
+            <div className="flex items-center gap-2">
+              <Download className="w-4 h-4 text-blue-300 animate-pulse shrink-0" />
+              <span className="font-semibold">{pdfProgressMessage}</span>
+            </div>
+            <button
+              onClick={() => setPdfProgressMessage(null)}
+              className="text-blue-300 hover:text-white font-bold cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+        )}
 
         {/* Archive Last Week's Modal Dialog */}
         {showArchivePrintModal && (
@@ -1038,7 +1180,7 @@ export const PrintableBulletinBuilder: React.FC = () => {
                     </span>
                     <span className="text-stone-700">
                       {items.map((item, idx) => {
-                        const body = useCondensedSummaries && item.bulletinSummary ? item.bulletinSummary : item.title;
+                        const body = getItemSummaryText(item);
                         return (
                           <span key={item.id}>
                             <strong className="font-semibold text-stone-900">{item.requesterName}</strong>
@@ -1061,7 +1203,7 @@ export const PrintableBulletinBuilder: React.FC = () => {
                     {praises.map((praise, idx) => (
                       <span key={praise.id}>
                         <strong className="font-semibold text-emerald-950">{praise.requesterName}</strong>
-                        {' '}({praise.answeredUpdate || praise.bulletinSummary || praise.title})
+                        {' '}({praise.answeredUpdate || getItemSummaryText(praise)})
                         {idx < praises.length - 1 ? '; ' : '.'}
                       </span>
                     ))}
@@ -1101,7 +1243,7 @@ export const PrintableBulletinBuilder: React.FC = () => {
                         {item.requesterName}
                       </td>
                       <td className="p-1 px-2 text-stone-800 align-top">
-                        {useCondensedSummaries && item.bulletinSummary ? item.bulletinSummary : item.content}
+                        {getItemSummaryText(item)}
                       </td>
                       <td className="p-1 px-2 text-stone-500 text-[10px] align-top whitespace-nowrap">
                         {item.category}
@@ -1142,7 +1284,7 @@ export const PrintableBulletinBuilder: React.FC = () => {
                             {praise.requesterName}
                           </td>
                           <td className="p-1 px-2 text-stone-800">
-                            {praise.answeredUpdate || praise.bulletinSummary || praise.title}
+                            {praise.answeredUpdate || getItemSummaryText(praise)}
                           </td>
                         </tr>
                       ))}
@@ -1153,31 +1295,47 @@ export const PrintableBulletinBuilder: React.FC = () => {
             </div>
           )}
 
-          {/* LAYOUT 3: MULTI-COLUMN DIRECTORY (2, 3, or 4 Columns) */}
+          {/* LAYOUT 3: MULTI-COLUMN DIRECTORY (2, 3, or 4 Columns with Balanced Flow) */}
           {(layoutMode === 'columns_3' || layoutMode === 'columns_2' || layoutMode === 'columns_4' || layoutMode === 'columns_1') && (
             <div
-              className={`gap-3 font-sans ${
+              className={`font-sans ${
                 layoutMode === 'columns_4'
-                  ? 'columns-1 sm:columns-2 md:columns-4'
+                  ? 'columns-4 print:columns-4'
                   : layoutMode === 'columns_3'
-                  ? 'columns-1 sm:columns-2 md:columns-3'
+                  ? 'columns-3 print:columns-3'
                   : layoutMode === 'columns_2'
-                  ? 'columns-1 md:columns-2'
+                  ? 'columns-2 print:columns-2'
                   : 'columns-1'
               }`}
+              style={{
+                columnCount:
+                  layoutMode === 'columns_4'
+                    ? 4
+                    : layoutMode === 'columns_3'
+                    ? 3
+                    : layoutMode === 'columns_2'
+                    ? 2
+                    : 1,
+                columnFill: 'balance',
+                columnGap: '1.5rem',
+              }}
             >
               {categoriesWithRequests.map((cat) => {
                 const items = activeNeeds.filter((r) => r.category === cat);
                 if (items.length === 0) return null;
 
+                // When category has <= 4 items, keep the block together.
+                // When category has > 4 items, allow it to break across columns so it never stacks into one single tall column!
+                const avoidCategoryBreak = items.length <= 4;
+
                 return (
                   <div
                     key={cat}
-                    className="break-inside-avoid page-break-inside-avoid mb-2.5 border-b border-stone-200 pb-1.5"
+                    className={`${avoidCategoryBreak ? 'break-inside-avoid page-break-inside-avoid' : 'break-inside-auto'} mb-3 border-b border-stone-200 pb-2`}
                   >
-                    {/* Category Ribbon */}
-                    <div className="flex items-center justify-between border-b border-stone-900 pb-0.5 mb-1 bg-stone-100/70 px-1 py-0.5">
-                      <span className="font-serif-church font-bold uppercase tracking-wider text-[9.5px] text-stone-900">
+                    {/* Category Ribbon Header */}
+                    <div className="break-after-avoid page-break-after-avoid flex items-center justify-between border-b border-stone-900 pb-0.5 mb-1.5 bg-stone-100/80 px-1.5 py-0.5">
+                      <span className="font-serif-church font-bold uppercase tracking-wider text-[10px] text-stone-900">
                         {cat}
                       </span>
                       <span className="text-[9px] text-stone-500 font-mono">
@@ -1188,7 +1346,7 @@ export const PrintableBulletinBuilder: React.FC = () => {
                     {/* Column Items */}
                     <ul className="space-y-0.5">
                       {items.map((item) => (
-                        <li key={item.id} className={`group ${spacingClasses[spacing]} flex items-start justify-between gap-1`}>
+                        <li key={item.id} className={`break-inside-avoid page-break-inside-avoid group ${spacingClasses[spacing]} flex items-start justify-between gap-1`}>
                           <div className="flex-1">
                             {showCheckboxes && (
                               <span className="inline-block w-2.5 h-2.5 border border-stone-400 rounded-2xs shrink-0 mr-1.5 align-middle -mt-0.5" />
@@ -1198,9 +1356,7 @@ export const PrintableBulletinBuilder: React.FC = () => {
                             </span>
                             <span className="text-stone-500 mx-1">—</span>
                             <span className="text-stone-800">
-                              {useCondensedSummaries && item.bulletinSummary
-                                ? item.bulletinSummary
-                                : item.title}
+                              {getItemSummaryText(item)}
                             </span>
 
                             {includeContactInfo && (item.requesterEmail || item.requesterPhone) && (
@@ -1230,9 +1386,9 @@ export const PrintableBulletinBuilder: React.FC = () => {
 
               {/* Praises Section in Multi-Column */}
               {includeAnsweredPraises && praises.length > 0 && (
-                <div className="break-inside-avoid page-break-inside-avoid mb-2.5 border-b border-emerald-300 pb-1.5">
-                  <div className="flex items-center justify-between border-b border-emerald-800 pb-0.5 mb-1 bg-emerald-50 px-1 py-0.5">
-                    <span className="font-serif-church font-bold uppercase tracking-wider text-[9.5px] text-emerald-950">
+                <div className={`${praises.length <= 4 ? 'break-inside-avoid page-break-inside-avoid' : 'break-inside-auto'} mb-3 border-b border-emerald-300 pb-2`}>
+                  <div className="break-after-avoid page-break-after-avoid flex items-center justify-between border-b border-emerald-800 pb-0.5 mb-1.5 bg-emerald-50 px-1.5 py-0.5">
+                    <span className="font-serif-church font-bold uppercase tracking-wider text-[10px] text-emerald-950">
                       Praises & Answers
                     </span>
                     <span className="text-[9px] text-emerald-700 font-mono">
@@ -1242,12 +1398,12 @@ export const PrintableBulletinBuilder: React.FC = () => {
 
                   <ul className="space-y-1">
                     {praises.map((praise) => (
-                      <li key={praise.id} className="text-stone-800">
+                      <li key={praise.id} className="break-inside-avoid page-break-inside-avoid text-stone-800">
                         <strong className="font-serif-church text-emerald-950 font-bold">
                           {praise.requesterName}
                         </strong>
                         <span className="text-stone-500 mx-1">—</span>
-                        <span>{praise.answeredUpdate || praise.bulletinSummary || praise.title}</span>
+                        <span>{praise.answeredUpdate || getItemSummaryText(praise)}</span>
                       </li>
                     ))}
                   </ul>

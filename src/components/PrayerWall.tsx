@@ -65,6 +65,7 @@ export const PrayerWall: React.FC<PrayerWallProps> = ({ forceSingleColumn = fals
     bulkArchiveAnsweredPrayers,
     bulkArchiveOlderWallPrayers,
     restoreAllWallArchives,
+    repairDateTitles,
   } = useApp();
 
   const currentTheme = getChurchTheme(currentChurch);
@@ -233,10 +234,19 @@ export const PrayerWall: React.FC<PrayerWallProps> = ({ forceSingleColumn = fals
                       <button
                         onClick={() => setImportModalOpen(true)}
                         className="flex items-center gap-1 text-[11px] font-semibold text-amber-900 hover:text-amber-950 bg-amber-50 hover:bg-amber-100 px-2 py-0.5 rounded border border-amber-300 cursor-pointer transition-colors"
-                        title="Bulk import prayer requests from a CSV file"
+                        title="Bulk import prayer requests from a CSV file with visual field matching"
                       >
                         <Upload className="w-3 h-3 text-amber-700" />
-                        <span>Import CSV</span>
+                        <span>Import CSV (Field Matcher)</span>
+                      </button>
+
+                      <button
+                        onClick={() => repairDateTitles()}
+                        className="flex items-center gap-1 text-[11px] font-semibold text-emerald-900 hover:text-emerald-950 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded border border-emerald-300 cursor-pointer transition-colors"
+                        title="Re-align prayer titles and categories so the headline is the prayer petition (Grace Fellowship style)"
+                      >
+                        <Sparkles className="w-3 h-3 text-emerald-600" />
+                        <span>⚡ Re-align Card Titles & Categories</span>
                       </button>
                     </>
                   )}
