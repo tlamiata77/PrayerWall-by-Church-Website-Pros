@@ -16,6 +16,7 @@ import { SubmitPrayerModal } from './components/SubmitPrayerModal';
 import { ChurchDirectory } from './components/ChurchDirectory';
 import { MemberPrayerHistory } from './components/MemberPrayerHistory';
 import { AuthModal } from './components/AuthModal';
+import { ImportPrayersModal } from './components/ImportPrayersModal';
 import { Heart, Sparkles, Shield, Printer, Globe, Code } from 'lucide-react';
 
 const MainContent: React.FC = () => {
@@ -43,6 +44,9 @@ const MainContent: React.FC = () => {
         onClose={closeLoginModal}
         defaultMode={loginModalInitialMode}
       />
+
+      {/* CSV Batch Import Prayers Modal */}
+      <ImportPrayersModal />
     </main>
   );
 };

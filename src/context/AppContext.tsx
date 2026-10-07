@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Church, PrayerRequest, UserRole, VisibilityType, RequestCategory, AppTab, UserAccount, DirectoryMember } from '../types';
+import { Church, PrayerRequest, UserRole, VisibilityType, RequestCategory, ModerationStatus, AppTab, UserAccount, DirectoryMember } from '../types';
 import { INITIAL_CHURCHES, INITIAL_REQUESTS } from '../data/initialData';
 import { SAMPLE_75_WEEKLY_REQUESTS } from '../data/sample75Requests';
 import { INITIAL_USERS } from '../data/initialUsers';
@@ -72,6 +72,25 @@ interface AppContextType {
   bulkArchiveOlderWallPrayers: (daysOld?: number) => number;
   restoreAllWallArchives: () => void;
   isModerating: boolean;
+  importModalOpen: boolean;
+  setImportModalOpen: (open: boolean) => void;
+  importPrayerRequestsBatch: (
+    newItems: Array<{
+      title: string;
+      content: string;
+      requesterName?: string;
+      requesterEmail?: string;
+      requesterPhone?: string;
+      isAnonymous?: boolean;
+      visibility?: VisibilityType;
+      category?: RequestCategory;
+      isUrgent?: boolean;
+      isAnswered?: boolean;
+      churchId?: string;
+      status?: ModerationStatus;
+      createdAt?: string;
+    }>
+  ) => number;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -732,6 +751,71 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return newId;
   };
 
+  const [importModalOpen, setImportModalOpen] = useState(false);
+
+  const importPrayerRequestsBatch = (
+    newItems: Array<{
+      title: string;
+      content: string;
+      requesterName?: string;
+      requesterEmail?: string;
+      requesterPhone?: string;
+      isAnonymous?: boolean;
+      visibility?: VisibilityType;
+      category?: RequestCategory;
+      isUrgent?: boolean;
+      isAnswered?: boolean;
+      churchId?: string;
+      status?: ModerationStatus;
+      createdAt?: string;
+    }>
+  ): number => {
+    const targetChurch = currentChurch;
+    const now = new Date();
+
+    const createdRequests: PrayerRequest[] = newItems.map((item, idx) => {
+      const targetChurchId = item.churchId || targetChurch.id;
+      const churchObj = churches.find((c) => c.id === targetChurchId) || targetChurch;
+      const isUrgent = Boolean(item.isUrgent);
+      const isAnswered = Boolean(item.isAnswered);
+      const category: RequestCategory = item.category || 'General';
+      const visibility: VisibilityType = item.visibility || 'church';
+      const status: ModerationStatus = item.status || 'approved';
+
+      return {
+        id: `csv-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 6)}`,
+        churchId: targetChurchId,
+        churchName: churchObj.name,
+        churchSlug: churchObj.slug,
+        title: item.title.trim(),
+        content: item.content.trim(),
+        requesterName: item.isAnonymous ? 'Anonymous' : (item.requesterName?.trim() || 'Church Member'),
+        requesterEmail: item.requesterEmail?.trim() || undefined,
+        requesterPhone: item.requesterPhone?.trim() || undefined,
+        isAnonymous: Boolean(item.isAnonymous),
+        visibility,
+        category,
+        isUrgent,
+        isAnswered,
+        prayerCount: 1,
+        createdAt: item.createdAt || new Date(now.getTime() - idx * 60000).toISOString(),
+        status,
+        bulletinSummary: item.title.length > 50 ? item.title.substring(0, 47) + '...' : item.title,
+        moderation: {
+          safetyScore: 98,
+          flags: [],
+          pastoralRecommendation: 'approve_public',
+          reviewedBy: 'CSV Batch Import',
+          reviewedAt: now.toISOString(),
+          reason: 'Imported via CSV batch tool.',
+        },
+      };
+    });
+
+    setRequests((prev) => [...createdRequests, ...prev]);
+    return createdRequests.length;
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -787,6 +871,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         bulkArchiveOlderWallPrayers,
         restoreAllWallArchives,
         isModerating,
+        importModalOpen,
+        setImportModalOpen,
+        importPrayerRequestsBatch,
       }}
     >
       {children}

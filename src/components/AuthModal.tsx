@@ -16,7 +16,8 @@ import {
   Sparkles,
   Phone,
   MapPin,
-  Heart
+  Heart,
+  Globe
 } from 'lucide-react';
 import { UserRole } from '../types';
 
@@ -69,8 +70,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [churchName, setChurchName] = useState('');
   const [churchDenomination, setChurchDenomination] = useState('');
   const [churchPastor, setChurchPastor] = useState('');
+  const [churchWebsite, setChurchWebsite] = useState('');
+  const [churchAddress, setChurchAddress] = useState('');
   const [churchCity, setChurchCity] = useState('');
   const [churchState, setChurchState] = useState('');
+  const [churchZipCode, setChurchZipCode] = useState('');
   const [churchEmail, setChurchEmail] = useState('');
   const [churchPassword, setChurchPassword] = useState('');
   const [churchPhone, setChurchPhone] = useState('');
@@ -156,6 +160,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
 
     const slug = churchName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    let finalWebsite = churchWebsite.trim();
+    if (finalWebsite && !finalWebsite.startsWith('http://') && !finalWebsite.startsWith('https://')) {
+      finalWebsite = `https://${finalWebsite}`;
+    }
+    if (!finalWebsite) {
+      finalWebsite = `https://${slug || 'church'}.org`;
+    }
+
     const newChurchId = addNewChurch({
       slug: slug || `church-${Date.now()}`,
       name: churchName.trim(),
@@ -164,10 +176,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       pastorName: churchPastor.trim(),
       contactEmail: churchEmail.trim(),
       phone: churchPhone.trim() || '(555) 012-3456',
-      address: '100 Main Street',
+      address: churchAddress.trim() || '100 Main Street',
       city: churchCity.trim() || 'Dallas',
       state: churchState.trim() || 'TX',
-      websiteUrl: `https://${slug || 'church'}.org`,
+      zipCode: churchZipCode.trim() || undefined,
+      websiteUrl: finalWebsite,
       themeColor: 'teal_pink',
       primaryColor: '#4eb8b9',
       accentColor: '#c219b0',
@@ -682,6 +695,26 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </div>
               </div>
 
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <Globe className="w-3.5 h-3.5 text-[#4eb8b9]" />
+                    <span>Church Website Address (URL)</span>
+                  </span>
+                  <span className="text-[10px] text-stone-400 font-normal">e.g. https://calvarybaptistalcoa.org</span>
+                </label>
+                <input
+                  type="text"
+                  value={churchWebsite}
+                  onChange={(e) => setChurchWebsite(e.target.value)}
+                  placeholder="e.g. https://calvarybaptistalcoa.org or calvaryalcoa.org"
+                  className="w-full px-3 py-2 text-xs rounded-lg border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#4eb8b9] font-medium"
+                />
+                <span className="text-[10px] text-stone-400 mt-0.5 block">
+                  Shown in the church directory & connects your congregation to your main church website
+                </span>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-stone-700 mb-1">
@@ -718,8 +751,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                <div className="sm:col-span-5">
+                  <label className="block text-xs font-semibold text-stone-700 mb-1">
+                    Street Address (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={churchAddress}
+                    onChange={(e) => setChurchAddress(e.target.value)}
+                    placeholder="e.g. 100 Main Street"
+                    className="w-full px-3 py-2 text-xs rounded-lg border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#4eb8b9]"
+                  />
+                </div>
+
+                <div className="sm:col-span-3">
                   <label className="block text-xs font-semibold text-stone-700 mb-1">
                     City *
                   </label>
@@ -728,12 +774,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     required
                     value={churchCity}
                     onChange={(e) => setChurchCity(e.target.value)}
-                    placeholder="Dallas"
+                    placeholder="Alcoa"
                     className="w-full px-3 py-2 text-xs rounded-lg border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#4eb8b9]"
                   />
                 </div>
 
-                <div>
+                <div className="sm:col-span-2">
                   <label className="block text-xs font-semibold text-stone-700 mb-1">
                     State *
                   </label>
@@ -742,7 +788,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     required
                     value={churchState}
                     onChange={(e) => setChurchState(e.target.value)}
-                    placeholder="TX"
+                    placeholder="TN"
+                    className="w-full px-3 py-2 text-xs rounded-lg border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#4eb8b9]"
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-semibold text-stone-700 mb-1">
+                    Zip
+                  </label>
+                  <input
+                    type="text"
+                    value={churchZipCode}
+                    onChange={(e) => setChurchZipCode(e.target.value)}
+                    placeholder="37701"
                     className="w-full px-3 py-2 text-xs rounded-lg border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#4eb8b9]"
                   />
                 </div>

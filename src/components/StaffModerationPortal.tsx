@@ -32,7 +32,9 @@ import {
   Palette,
   MapPin,
   Upload,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Globe,
+  ExternalLink
 } from 'lucide-react';
 
 export const StaffModerationPortal: React.FC = () => {
@@ -48,6 +50,7 @@ export const StaffModerationPortal: React.FC = () => {
     updateRequestModeration,
     updateChurchProfile,
     addNewChurch,
+    setImportModalOpen,
     togglePrayerArchived,
     togglePrintArchived,
     restoreAllWallArchives,
@@ -87,9 +90,16 @@ export const StaffModerationPortal: React.FC = () => {
   const [newChurchName, setNewChurchName] = useState('');
   const [newChurchPastor, setNewChurchPastor] = useState('');
   const [newChurchEmail, setNewChurchEmail] = useState('');
+  const [newChurchWebsite, setNewChurchWebsite] = useState('');
+  const [newChurchPhone, setNewChurchPhone] = useState('');
+  const [newChurchAddress, setNewChurchAddress] = useState('');
   const [newChurchCity, setNewChurchCity] = useState('');
   const [newChurchState, setNewChurchState] = useState('');
   const [newChurchDenomination, setNewChurchDenomination] = useState('');
+
+  // Quick edit church website inline in the network table
+  const [editingWebsiteChurchId, setEditingWebsiteChurchId] = useState<string | null>(null);
+  const [editWebsiteInput, setEditWebsiteInput] = useState<string>('');
 
   const handleSaveSettings = (e: React.FormEvent) => {
     e.preventDefault();
@@ -103,6 +113,14 @@ export const StaffModerationPortal: React.FC = () => {
     if (!newChurchName.trim()) return;
 
     const slug = newChurchName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    let website = newChurchWebsite.trim();
+    if (website && !website.startsWith('http://') && !website.startsWith('https://')) {
+      website = `https://${website}`;
+    }
+    if (!website) {
+      website = `https://${slug}.org`;
+    }
+
     addNewChurch({
       slug,
       name: newChurchName.trim(),
@@ -110,11 +128,11 @@ export const StaffModerationPortal: React.FC = () => {
       denomination: newChurchDenomination || 'Non-Denominational',
       pastorName: newChurchPastor.trim() || 'Pastor',
       contactEmail: newChurchEmail.trim() || 'info@church.org',
-      phone: '(555) 012-3456',
-      address: '100 Main Street',
+      phone: newChurchPhone.trim() || '(555) 012-3456',
+      address: newChurchAddress.trim() || '100 Main Street',
       city: newChurchCity || 'Austin',
       state: newChurchState || 'TX',
-      websiteUrl: `https://${slug}.org`,
+      websiteUrl: website,
       themeColor: 'amber',
       welcomeMessage: 'Welcome to our church prayer wall. Stand with us in prayer.',
       scriptureVerse: 'Pray without ceasing. — 1 Thessalonians 5:17',
@@ -133,6 +151,12 @@ export const StaffModerationPortal: React.FC = () => {
     setNewChurchName('');
     setNewChurchPastor('');
     setNewChurchEmail('');
+    setNewChurchWebsite('');
+    setNewChurchPhone('');
+    setNewChurchAddress('');
+    setNewChurchCity('');
+    setNewChurchState('');
+    setNewChurchDenomination('');
   };
 
   // Special Access Gate: Pastors and staff special access
@@ -224,8 +248,18 @@ export const StaffModerationPortal: React.FC = () => {
           </p>
         </div>
 
-        {/* Sub-tab navigation */}
-        <div className="flex items-center gap-1.5 text-xs bg-stone-100 p-1 rounded-xl">
+        {/* Actions & Sub-tab navigation */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => setImportModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-lg text-xs font-bold transition-all shadow-2xs cursor-pointer"
+            title="Import prayer requests from a CSV spreadsheet or export"
+          >
+            <Upload className="w-3.5 h-3.5 text-amber-700" />
+            <span>Import CSV</span>
+          </button>
+
+          <div className="flex items-center gap-1.5 text-xs bg-stone-100 p-1 rounded-xl">
           {activeRole === 'super_admin' && (
             <button
               onClick={() => setActiveSubTab('super_admin')}
@@ -299,6 +333,7 @@ export const StaffModerationPortal: React.FC = () => {
           </button>
         </div>
       </div>
+    </div>
 
       {/* SUB-TAB 1: SUPER ADMIN MULTI-CHURCH ROSTER (The "Login As" feature requested by user!) */}
       {activeSubTab === 'super_admin' && (
@@ -356,9 +391,68 @@ export const StaffModerationPortal: React.FC = () => {
                           <div className="font-bold text-stone-900 text-sm font-serif-church">
                             {church.name}
                           </div>
-                          <div className="text-[11px] text-stone-500">
-                            {church.city}, {church.state} • {church.websiteUrl}
-                          </div>
+                          {editingWebsiteChurchId === church.id ? (
+                            <form
+                              onSubmit={(e) => {
+                                e.preventDefault();
+                                let url = editWebsiteInput.trim();
+                                if (url && !url.startsWith('http://') && !url.startsWith('https://')) {
+                                  url = `https://${url}`;
+                                }
+                                updateChurchProfile(church.id, { websiteUrl: url || church.websiteUrl });
+                                setEditingWebsiteChurchId(null);
+                              }}
+                              className="flex items-center gap-1.5 mt-1"
+                            >
+                              <input
+                                type="text"
+                                value={editWebsiteInput}
+                                onChange={(e) => setEditWebsiteInput(e.target.value)}
+                                placeholder="https://calvarybaptistalcoa.org"
+                                className="px-2 py-0.5 text-[11px] border border-stone-300 rounded focus:outline-none focus:ring-1 focus:ring-amber-500 w-52 sm:w-64"
+                                autoFocus
+                              />
+                              <button
+                                type="submit"
+                                className="px-2 py-0.5 bg-emerald-600 text-white rounded text-[10px] font-bold hover:bg-emerald-700 cursor-pointer"
+                              >
+                                Save
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditingWebsiteChurchId(null)}
+                                className="px-1.5 py-0.5 bg-stone-200 text-stone-700 rounded text-[10px] hover:bg-stone-300 cursor-pointer"
+                              >
+                                Cancel
+                              </button>
+                            </form>
+                          ) : (
+                            <div className="text-[11px] text-stone-500 flex items-center gap-1.5 flex-wrap mt-0.5">
+                              <span>{church.city}, {church.state}</span>
+                              <span>•</span>
+                              <a
+                                href={church.websiteUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-[#1e6a6b] hover:underline font-medium inline-flex items-center gap-1"
+                                title="Visit church website"
+                              >
+                                <span>{church.websiteUrl}</span>
+                                <ExternalLink className="w-2.5 h-2.5 shrink-0" />
+                              </a>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingWebsiteChurchId(church.id);
+                                  setEditWebsiteInput(church.websiteUrl || '');
+                                }}
+                                className="text-stone-400 hover:text-amber-700 p-0.5 rounded cursor-pointer transition-colors"
+                                title="Edit Website Address"
+                              >
+                                <Edit className="w-3 h-3" />
+                              </button>
+                            </div>
+                          )}
                         </td>
 
                         <td className="px-6 py-4">
@@ -1278,33 +1372,77 @@ export const StaffModerationPortal: React.FC = () => {
             </p>
 
             <form onSubmit={handleCreateChurch} className="space-y-3 text-xs">
-              <div>
-                <label className="font-semibold text-stone-700 block mb-1">Church Name</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Calvary Community Church"
-                  value={newChurchName}
-                  onChange={(e) => setNewChurchName(e.target.value)}
-                  className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="font-semibold text-stone-700 block mb-1">Church Name *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Calvary Community Church"
+                    value={newChurchName}
+                    onChange={(e) => setNewChurchName(e.target.value)}
+                    className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-semibold text-stone-700 block mb-1">Denomination / Affiliation</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Baptist, Non-Denom"
+                    value={newChurchDenomination}
+                    onChange={(e) => setNewChurchDenomination(e.target.value)}
+                    className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg"
+                  />
+                </div>
               </div>
 
               <div>
-                <label className="font-semibold text-stone-700 block mb-1">Pastor Name</label>
+                <label className="font-semibold text-stone-700 block mb-1 flex items-center gap-1.5">
+                  <Globe className="w-3.5 h-3.5 text-[#4eb8b9]" />
+                  <span>Church Website Address (URL)</span>
+                </label>
                 <input
                   type="text"
-                  placeholder="e.g. Pastor John Doe"
-                  value={newChurchPastor}
-                  onChange={(e) => setNewChurchPastor(e.target.value)}
-                  className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg"
+                  placeholder="e.g. https://calvarycommunity.org or calvarycommunity.org"
+                  value={newChurchWebsite}
+                  onChange={(e) => setNewChurchWebsite(e.target.value)}
+                  className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg font-medium"
                 />
+                <span className="text-[10px] text-stone-400 mt-0.5 block">
+                  Displayed in church network list and links congregation to your main website
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="font-semibold text-stone-700 block mb-1">Pastor Name</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Pastor John Doe"
+                    value={newChurchPastor}
+                    onChange={(e) => setNewChurchPastor(e.target.value)}
+                    className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-semibold text-stone-700 block mb-1">Church Phone</label>
+                  <input
+                    type="tel"
+                    placeholder="(555) 012-3456"
+                    value={newChurchPhone}
+                    onChange={(e) => setNewChurchPhone(e.target.value)}
+                    className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg"
+                  />
+                </div>
               </div>
 
               <div>
-                <label className="font-semibold text-stone-700 block mb-1">Church Contact Email</label>
+                <label className="font-semibold text-stone-700 block mb-1">Church Contact Email *</label>
                 <input
                   type="email"
+                  required
                   placeholder="pastor@calvary.org"
                   value={newChurchEmail}
                   onChange={(e) => setNewChurchEmail(e.target.value)}

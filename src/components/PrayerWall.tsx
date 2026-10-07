@@ -31,7 +31,8 @@ import {
   Palette,
   MapPin,
   Phone,
-  Mail
+  Mail,
+  Upload
 } from 'lucide-react';
 
 const CATEGORIES: RequestCategory[] = [
@@ -56,6 +57,7 @@ export const PrayerWall: React.FC<PrayerWallProps> = ({ forceSingleColumn = fals
     filteredChurchRequests,
     incrementPrayerCount,
     setSubmitModalOpen,
+    setImportModalOpen,
     activeRole,
     togglePrayerAnswered,
     updateRequestModeration,
@@ -218,14 +220,25 @@ export const PrayerWall: React.FC<PrayerWallProps> = ({ forceSingleColumn = fals
                   </span>
 
                   {(activeRole === 'church_staff' || activeRole === 'super_admin') && (
-                    <button
-                      onClick={() => setBrandingModalOpen(true)}
-                      className="flex items-center gap-1 text-[11px] font-semibold text-stone-600 hover:text-stone-900 bg-stone-100 hover:bg-stone-200 px-2 py-0.5 rounded border border-stone-200 cursor-pointer transition-colors"
-                      title="Set Church Logo, Address, Contact Info and Theme"
-                    >
-                      <Palette className="w-3 h-3 text-[#4eb8b9]" />
-                      <span>Edit Logo & Theme</span>
-                    </button>
+                    <>
+                      <button
+                        onClick={() => setBrandingModalOpen(true)}
+                        className="flex items-center gap-1 text-[11px] font-semibold text-stone-600 hover:text-stone-900 bg-stone-100 hover:bg-stone-200 px-2 py-0.5 rounded border border-stone-200 cursor-pointer transition-colors"
+                        title="Set Church Logo, Address, Contact Info and Theme"
+                      >
+                        <Palette className="w-3 h-3 text-[#4eb8b9]" />
+                        <span>Edit Logo & Theme</span>
+                      </button>
+
+                      <button
+                        onClick={() => setImportModalOpen(true)}
+                        className="flex items-center gap-1 text-[11px] font-semibold text-amber-900 hover:text-amber-950 bg-amber-50 hover:bg-amber-100 px-2 py-0.5 rounded border border-amber-300 cursor-pointer transition-colors"
+                        title="Bulk import prayer requests from a CSV file"
+                      >
+                        <Upload className="w-3 h-3 text-amber-700" />
+                        <span>Import CSV</span>
+                      </button>
+                    </>
                   )}
                 </div>
 
