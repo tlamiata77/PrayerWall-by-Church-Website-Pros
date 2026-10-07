@@ -51,6 +51,7 @@ export const StaffModerationPortal: React.FC = () => {
     updateChurchProfile,
     addNewChurch,
     setImportModalOpen,
+    setCurrentChurchId,
     togglePrayerArchived,
     togglePrintArchived,
     restoreAllWallArchives,
@@ -210,13 +211,22 @@ export const StaffModerationPortal: React.FC = () => {
 
             <button
               onClick={() => {
-                const pastor = users.find((u) => u.role === 'church_staff' && u.churchId === currentChurch.id) || users[0];
+                const pastor =
+                  users.find(
+                    (u) =>
+                      u.role === 'church_staff' &&
+                      (u.churchId === currentChurch.id ||
+                        (currentChurch.id === 'church-calvary-baptist' &&
+                          (u.id === 'user-pastor-calvary' || u.name.includes('Williamson'))))
+                  ) || users[0];
                 if (pastor) switchAccount(pastor.id);
               }}
               className="w-full sm:w-auto px-5 py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-lg text-xs font-semibold cursor-pointer flex items-center justify-center gap-2"
             >
               <Sparkles className="w-4 h-4 text-amber-600" />
-              <span>Quick Demo: Switch to Pastor David Matthews</span>
+              <span>
+                Quick Demo: Switch to {currentChurch.pastorName || 'Senior Pastor'} ({currentChurch.name})
+              </span>
             </button>
           </div>
         </div>
@@ -253,10 +263,10 @@ export const StaffModerationPortal: React.FC = () => {
           <button
             onClick={() => setImportModalOpen(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-lg text-xs font-bold transition-all shadow-2xs cursor-pointer"
-            title="Import prayer requests from a CSV spreadsheet or export"
+            title={`Import prayer requests from a CSV spreadsheet into ${currentChurch.name}`}
           >
             <Upload className="w-3.5 h-3.5 text-amber-700" />
-            <span>Import CSV</span>
+            <span>Import CSV into {currentChurch.name}</span>
           </button>
 
           <div className="flex items-center gap-1.5 text-xs bg-stone-100 p-1 rounded-xl">
@@ -474,14 +484,28 @@ export const StaffModerationPortal: React.FC = () => {
                         </td>
 
                         <td className="px-6 py-4 text-right">
-                          <button
-                            onClick={() => loginAsChurch(church.id)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-xs shadow-xs transition-all cursor-pointer"
-                            title="Login as this church to troubleshoot their view and settings"
-                          >
-                            <LogIn className="w-3.5 h-3.5" />
-                            <span>Login As Church</span>
-                          </button>
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => {
+                                setCurrentChurchId(church.id);
+                                setImportModalOpen(true);
+                              }}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-lg font-bold text-xs shadow-2xs transition-all cursor-pointer"
+                              title={`Import CSV prayer requests directly into ${church.name}`}
+                            >
+                              <Upload className="w-3.5 h-3.5 text-amber-700" />
+                              <span>Import CSV</span>
+                            </button>
+
+                            <button
+                              onClick={() => loginAsChurch(church.id)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-xs shadow-xs transition-all cursor-pointer"
+                              title="Login as this church to troubleshoot their view and settings"
+                            >
+                              <LogIn className="w-3.5 h-3.5" />
+                              <span>Login As Church</span>
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );

@@ -201,7 +201,19 @@ export const AppNavigation: React.FC = () => {
                       if (e.target.value === 'REGISTER_NEW_CHURCH') {
                         openLoginModal(undefined, 'register_church');
                       } else {
-                        setCurrentChurchId(e.target.value);
+                        const targetId = e.target.value;
+                        setCurrentChurchId(targetId);
+                        // Automatically switch to that church's pastor account for instant access
+                        const matchingPastor = users.find(
+                          (u) =>
+                            (u.churchId === targetId ||
+                              (targetId === 'church-calvary-baptist' &&
+                                (u.id === 'user-pastor-calvary' || u.name.includes('Williamson')))) &&
+                            u.role === 'church_staff'
+                        );
+                        if (matchingPastor) {
+                          switchAccount(matchingPastor.id);
+                        }
                       }
                     }}
                     className="appearance-none bg-stone-100 hover:bg-stone-200/80 text-stone-700 text-xs font-semibold rounded-md pl-2 pr-6 py-1 border border-stone-300/80 cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#4eb8b9]"
@@ -210,7 +222,7 @@ export const AppNavigation: React.FC = () => {
                     <optgroup label="Churches on Network">
                       {churches.map((church) => (
                         <option key={church.id} value={church.id}>
-                          Switch: {church.name} ({church.city}, {church.state})
+                          Switch: {church.name} ({church.city}, {church.state}){church.pastorName ? ` • ${church.pastorName}` : ''}
                         </option>
                       ))}
                     </optgroup>
@@ -366,6 +378,79 @@ export const AppNavigation: React.FC = () => {
                         <span>Church Logo & Color Theme</span>
                       </button>
                     )}
+
+                    {/* 1-Click Church Accounts Switching */}
+                    <div className="border-t border-stone-100 my-1 pt-1.5 px-1">
+                      <div className="text-[10px] font-bold text-stone-400 uppercase tracking-wider px-2 py-1 flex items-center justify-between">
+                        <span>Church Portals</span>
+                        <span className="text-[9px] text-amber-600 font-semibold">1-Click</span>
+                      </div>
+
+                      <button
+                        onClick={() => {
+                          const pastor = users.find(
+                            (u) =>
+                              u.id === 'user-pastor-calvary' ||
+                              u.churchId === 'church-calvary-baptist' ||
+                              u.name.toLowerCase().includes('williamson')
+                          );
+                          if (pastor) {
+                            switchAccount(pastor.id);
+                          }
+                          setCurrentChurchId('church-calvary-baptist');
+                          setActiveRole('church_staff');
+                          setUserDropdownOpen(false);
+                        }}
+                        className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs flex items-center justify-between cursor-pointer transition-colors ${
+                          currentChurchId === 'church-calvary-baptist'
+                            ? 'bg-amber-50 text-amber-900 font-bold border border-amber-300'
+                            : 'hover:bg-stone-50 text-stone-700'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <ChurchIcon className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                          <div className="truncate">
+                            <span className="block font-semibold">Calvary Baptist</span>
+                            <span className="text-[10px] text-stone-500 block">Pastor Greg Williamson</span>
+                          </div>
+                        </div>
+                        {currentChurchId === 'church-calvary-baptist' ? (
+                          <span className="text-[9px] bg-amber-200 text-amber-800 px-1 py-0.2 rounded font-bold">Active</span>
+                        ) : (
+                          <span className="text-[9px] text-stone-400">Login</span>
+                        )}
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          const pastor = users.find((u) => u.id === 'user-pastor-grace');
+                          if (pastor) {
+                            switchAccount(pastor.id);
+                          }
+                          setCurrentChurchId('church-grace');
+                          setActiveRole('church_staff');
+                          setUserDropdownOpen(false);
+                        }}
+                        className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs flex items-center justify-between cursor-pointer transition-colors ${
+                          currentChurchId === 'church-grace'
+                            ? 'bg-amber-50 text-amber-900 font-bold border border-amber-300'
+                            : 'hover:bg-stone-50 text-stone-700'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <ChurchIcon className="w-3.5 h-3.5 text-[#4eb8b9] shrink-0" />
+                          <div className="truncate">
+                            <span className="block font-semibold">Grace Fellowship</span>
+                            <span className="text-[10px] text-stone-500 block">Pastor David Matthews</span>
+                          </div>
+                        </div>
+                        {currentChurchId === 'church-grace' ? (
+                          <span className="text-[9px] bg-amber-200 text-amber-800 px-1 py-0.2 rounded font-bold">Active</span>
+                        ) : (
+                          <span className="text-[9px] text-stone-400">Login</span>
+                        )}
+                      </button>
+                    </div>
 
                     <button
                       onClick={() => {

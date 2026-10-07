@@ -50,6 +50,18 @@ export const INITIAL_USERS: UserAccount[] = [
     createdAt: '2025-04-05T11:15:00Z',
   },
   {
+    id: 'user-pastor-calvary',
+    email: 'pastor@calvarybaptistalcoa.org',
+    password: 'calvary2026',
+    name: 'Pastor Greg Williamson',
+    role: 'church_staff',
+    churchId: 'church-calvary-baptist',
+    title: 'Senior Pastor',
+    phone: '(865) 555-0144',
+    avatarUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=240&h=240&q=80',
+    createdAt: '2025-05-01T08:00:00Z',
+  },
+  {
     id: 'user-super-admin',
     email: 'admin@churchwebsitepros.com',
     password: 'superadmin123',

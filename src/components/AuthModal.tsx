@@ -225,6 +225,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   const handleQuickLogin = (demoUser: typeof users[0]) => {
     switchAccount(demoUser.id);
+    if (demoUser.churchId) {
+      setCurrentChurchId(demoUser.churchId);
+    }
+    setActiveRole(demoUser.role);
     setSuccessMsg(`Signed in as ${demoUser.name}`);
     setTimeout(() => {
       onClose();
@@ -281,56 +285,102 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         {/* Quick Demo Logins Bar */}
         <div className="bg-stone-50 border-b border-stone-200 p-4">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] font-semibold text-stone-600 uppercase tracking-wider flex items-center gap-1.5">
+            <span className="text-[11px] font-bold text-stone-700 uppercase tracking-wider flex items-center gap-1.5">
               <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-              1-Click Demo Accounts:
+              1-Click Church & Pastor Sign-In:
             </span>
-            <span className="text-[10px] text-stone-400">Preloaded test logins</span>
+            <span className="text-[10px] text-stone-400 font-medium">Instant sign-in</span>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {users.slice(0, 5).map((u) => {
-              const isSelected = currentUser?.id === u.id;
-              return (
-                <button
-                  key={u.id}
-                  type="button"
-                  onClick={() => handleQuickLogin(u)}
-                  className={`text-left p-2 rounded-lg border text-xs transition-all cursor-pointer flex flex-col justify-between ${
-                    isSelected
-                      ? 'bg-amber-50 border-amber-400 ring-1 ring-amber-400/40'
-                      : 'bg-white border-stone-200 hover:border-stone-300 hover:bg-stone-100/60'
-                  }`}
-                >
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <img
-                      src={u.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=80&h=80&q=80'}
-                      alt={u.name}
-                      className="w-5 h-5 rounded-full object-cover border border-stone-300"
-                    />
-                    <span className="font-semibold text-stone-800 truncate text-[11px]">
-                      {u.name.split(' ')[0]} {u.name.split(' ')[1]?.[0]}.
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span
-                      className={`text-[9px] font-semibold px-1 py-0.2 rounded ${
-                        u.role === 'church_staff'
-                          ? 'bg-blue-100 text-blue-700'
-                          : u.role === 'super_admin'
-                          ? 'bg-purple-100 text-purple-700'
-                          : 'bg-emerald-100 text-emerald-700'
-                      }`}
-                    >
-                      {u.role === 'church_staff' ? 'Pastor/Staff' : u.role === 'super_admin' ? 'Super Admin' : 'Member'}
-                    </span>
-                    <span className="text-[10px] text-stone-400">
-                      {isSelected ? '✓ active' : 'select'}
-                    </span>
-                  </div>
-                </button>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {/* Guarantee Calvary Baptist Church & Pastor Greg Williamson is shown first and prominently */}
+            {(() => {
+              const calvaryPastor = users.find(
+                (u) =>
+                  u.id === 'user-pastor-calvary' ||
+                  u.churchId === 'church-calvary-baptist' ||
+                  u.name.toLowerCase().includes('williamson')
+              ) || {
+                id: 'user-pastor-calvary',
+                email: 'pastor@calvarybaptistalcoa.org',
+                password: 'calvary2026',
+                name: 'Pastor Greg Williamson',
+                role: 'church_staff' as const,
+                churchId: 'church-calvary-baptist',
+                title: 'Senior Pastor',
+                avatarUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=240&h=240&q=80',
+                createdAt: '2025-05-01T08:00:00Z',
+              };
+
+              const otherUsers = users.filter(
+                (u) =>
+                  u.id !== calvaryPastor.id &&
+                  u.id !== 'user-pastor-calvary' &&
+                  !u.name.toLowerCase().includes('williamson') &&
+                  (u.role === 'church_staff' || u.role === 'super_admin' || u.id === 'user-member-rebecca')
               );
-            })}
+
+              const displayUsers = [calvaryPastor, ...otherUsers].slice(0, 6);
+
+              return displayUsers.map((u) => {
+                const church =
+                  churches.find((c) => c.id === u.churchId) ||
+                  (u.churchId === 'church-calvary-baptist'
+                    ? churches.find((c) => c.name.toLowerCase().includes('calvary'))
+                    : undefined);
+                const isSelected = currentUser?.id === u.id;
+                const churchNameDisplay =
+                  church?.name ||
+                  (u.id === 'user-pastor-calvary' || u.name.includes('Williamson')
+                    ? 'Calvary Baptist Church'
+                    : 'Global Network Oversight');
+
+                return (
+                  <button
+                    key={u.id}
+                    type="button"
+                    onClick={() => handleQuickLogin(u)}
+                    className={`text-left p-2.5 rounded-xl border text-xs transition-all cursor-pointer flex items-center justify-between gap-2 ${
+                      isSelected
+                        ? 'bg-amber-50 border-amber-400 ring-1 ring-amber-400/40 shadow-xs'
+                        : 'bg-white border-stone-200 hover:border-amber-400 hover:bg-amber-50/40'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <img
+                        src={u.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=80&h=80&q=80'}
+                        alt={u.name}
+                        className="w-7 h-7 rounded-full object-cover border border-stone-300 shrink-0"
+                      />
+                      <div className="min-w-0">
+                        <div className="font-bold text-stone-900 text-xs truncate">
+                          {u.name}
+                        </div>
+                        <div className="text-[10px] text-stone-500 truncate font-medium">
+                          {churchNameDisplay}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <span
+                        className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                          u.role === 'church_staff'
+                            ? 'bg-blue-100 text-blue-800'
+                            : u.role === 'super_admin'
+                            ? 'bg-purple-100 text-purple-800'
+                            : 'bg-emerald-100 text-emerald-800'
+                        }`}
+                      >
+                        {u.role === 'church_staff' ? 'Pastor' : u.role === 'super_admin' ? 'Admin' : 'Member'}
+                      </span>
+                      <span className="text-[9px] text-stone-400 font-semibold block mt-0.5">
+                        {isSelected ? '✓ active' : 'sign in'}
+                      </span>
+                    </div>
+                  </button>
+                );
+              });
+            })()}
           </div>
         </div>
 
@@ -399,6 +449,120 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
           {mode === 'login' ? (
             <form onSubmit={handleLogin} className="space-y-4">
+              {/* Church Quick Selector */}
+              <div className="bg-amber-50/70 border border-amber-200/80 rounded-xl p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-amber-950 uppercase tracking-wider flex items-center gap-1.5">
+                    <ChurchIcon className="w-3.5 h-3.5 text-amber-700" />
+                    <span>Select Church Account to Sign In:</span>
+                  </span>
+                  <span className="text-[10px] text-amber-700 font-medium">Click to select & prefill</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEmail('pastor@calvarybaptistalcoa.org');
+                      setPassword('calvary2026');
+                    }}
+                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-center gap-2.5 ${
+                      email === 'pastor@calvarybaptistalcoa.org'
+                        ? 'bg-amber-100 border-amber-500 ring-1 ring-amber-400/50 shadow-xs'
+                        : 'bg-white border-amber-200/70 hover:bg-amber-50/60'
+                    }`}
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-amber-600 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
+                      CBC
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-stone-900 truncate flex items-center gap-1">
+                        <span>Calvary Baptist Church</span>
+                        <span className="text-[9px] bg-amber-200 text-amber-900 px-1 py-0.2 rounded font-semibold">Active</span>
+                      </div>
+                      <div className="text-[10px] text-stone-600 truncate">
+                        Pastor Greg Williamson • Alcoa, TN
+                      </div>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEmail('pastor@gracefellowshipdallas.org');
+                      setPassword('grace2026');
+                    }}
+                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-center gap-2.5 ${
+                      email === 'pastor@gracefellowshipdallas.org'
+                        ? 'bg-amber-100 border-amber-500 ring-1 ring-amber-400/50 shadow-xs'
+                        : 'bg-white border-stone-200 hover:bg-stone-50'
+                    }`}
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-[#4eb8b9] text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
+                      GF
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-stone-900 truncate">
+                        Grace Fellowship Church
+                      </div>
+                      <div className="text-[10px] text-stone-500 truncate">
+                        Pastor David Matthews • Dallas, TX
+                      </div>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEmail('care@redeemeratl.org');
+                      setPassword('redeemer2026');
+                    }}
+                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-center gap-2.5 ${
+                      email === 'care@redeemeratl.org'
+                        ? 'bg-amber-100 border-amber-500 ring-1 ring-amber-400/50 shadow-xs'
+                        : 'bg-white border-stone-200 hover:bg-stone-50'
+                    }`}
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
+                      RCC
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-stone-900 truncate">
+                        Redeemer Community Church
+                      </div>
+                      <div className="text-[10px] text-stone-500 truncate">
+                        Pastor Sarah Jenkins • Atlanta, GA
+                      </div>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEmail('admin@churchwebsitepros.com');
+                      setPassword('superadmin123');
+                    }}
+                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-center gap-2.5 ${
+                      email === 'admin@churchwebsitepros.com'
+                        ? 'bg-amber-100 border-amber-500 ring-1 ring-amber-400/50 shadow-xs'
+                        : 'bg-white border-stone-200 hover:bg-stone-50'
+                    }`}
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-purple-700 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
+                      <Crown className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-stone-900 truncate">
+                        Super Admin Platform
+                      </div>
+                      <div className="text-[10px] text-stone-500 truncate">
+                        Multi-Church Network Oversight
+                      </div>
+                    </div>
+                  </button>
+                </div>
+              </div>
+
               <div>
                 <label className="block text-xs font-semibold text-stone-700 mb-1.5">
                   Email Address
@@ -410,7 +574,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="e.g. pastor@gracefellowshipdallas.org"
+                    placeholder="e.g. pastor@calvarybaptistalcoa.org"
                     className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500 bg-stone-50/50"
                   />
                 </div>
@@ -421,8 +585,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <label className="block text-xs font-semibold text-stone-700">
                     Password
                   </label>
-                  <span className="text-[11px] text-stone-400">
-                    Demo pw: <code className="bg-stone-100 px-1 py-0.5 rounded text-stone-600">grace2026</code> or <code className="bg-stone-100 px-1 py-0.5 rounded text-stone-600">member123</code>
+                  <span className="text-[11px] text-stone-500">
+                    Demo pw: <code className="bg-stone-100 px-1 py-0.5 rounded text-stone-700 font-bold">calvary2026</code>, <code className="bg-stone-100 px-1 py-0.5 rounded text-stone-600">grace2026</code>, or <code className="bg-stone-100 px-1 py-0.5 rounded text-stone-600">member123</code>
                   </span>
                 </div>
                 <div className="relative">
@@ -444,7 +608,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   className="w-full py-2.5 px-4 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-lg text-sm shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <KeyRound className="w-4 h-4" />
-                  <span>Sign In</span>
+                  <span>
+                    {email === 'pastor@calvarybaptistalcoa.org'
+                      ? 'Sign In to Calvary Baptist Church'
+                      : 'Sign In'}
+                  </span>
                 </button>
               </div>
 

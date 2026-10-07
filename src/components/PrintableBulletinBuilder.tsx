@@ -27,7 +27,8 @@ import {
   Gauge,
   Archive,
   ArchiveRestore,
-  RotateCcw
+  RotateCcw,
+  Upload
 } from 'lucide-react';
 
 export const PrintableBulletinBuilder: React.FC = () => {
@@ -40,6 +41,7 @@ export const PrintableBulletinBuilder: React.FC = () => {
     archiveLastWeeksPrayersForPrint,
     restoreAllPrintArchives,
     togglePrintArchived,
+    setImportModalOpen,
   } = useApp();
 
   // Template / Layout selection
@@ -396,6 +398,16 @@ export const PrintableBulletinBuilder: React.FC = () => {
             >
               <span className="font-mono">{showCheckboxes ? '☑' : '☐'}</span>
               <span>Checkboxes: <strong>{showCheckboxes ? 'ON' : 'OFF'}</strong></span>
+            </button>
+
+            {/* Import CSV Button */}
+            <button
+              onClick={() => setImportModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-950/70 hover:bg-amber-900 text-amber-200 rounded-lg text-xs font-semibold border border-amber-600/60 transition-colors cursor-pointer"
+              title={`Import prayer requests from CSV file into ${currentChurch.name}`}
+            >
+              <Upload className="w-3.5 h-3.5 text-amber-400" />
+              <span>Import CSV</span>
             </button>
 
             {/* Load 75 Sample Requests Button */}

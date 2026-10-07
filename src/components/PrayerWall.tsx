@@ -565,19 +565,33 @@ export const PrayerWall: React.FC<PrayerWallProps> = ({ forceSingleColumn = fals
             <Heart className="w-8 h-8 text-amber-600" />
           </div>
           <h3 className="font-serif-church text-xl font-bold text-stone-900">
-            No prayer requests match your filter
+            {filteredChurchRequests.length === 0 ? `Welcome to ${currentChurch.name}!` : 'No prayer requests match your filter'}
           </h3>
           <p className="text-sm text-stone-500">
-            {searchQuery
+            {filteredChurchRequests.length === 0
+              ? `There are no prayer requests yet for ${currentChurch.name}. You can submit a new prayer request or bulk import existing requests from a CSV file.`
+              : searchQuery
               ? 'Try changing your search keywords or resetting filters.'
               : 'Be the first to share a prayer request or praise report with our church family.'}
           </p>
-          <button
-            onClick={() => setSubmitModalOpen(true)}
-            className="px-4 py-2 bg-amber-600 text-white rounded-lg text-sm font-semibold hover:bg-amber-700 transition-colors cursor-pointer"
-          >
-            Submit Prayer Request
-          </button>
+          <div className="flex items-center justify-center gap-3 flex-wrap">
+            <button
+              onClick={() => setSubmitModalOpen(true)}
+              className="px-4 py-2 bg-amber-600 text-white rounded-lg text-sm font-semibold hover:bg-amber-700 transition-colors cursor-pointer"
+            >
+              Submit Prayer Request
+            </button>
+            {(activeRole === 'church_staff' || activeRole === 'super_admin') && (
+              <button
+                onClick={() => setImportModalOpen(true)}
+                className="px-4 py-2 bg-amber-50 text-amber-900 border border-amber-300 rounded-lg text-sm font-semibold hover:bg-amber-100 transition-colors cursor-pointer flex items-center gap-1.5"
+                title={`Import CSV prayer requests directly into ${currentChurch.name}`}
+              >
+                <Upload className="w-4 h-4 text-amber-700" />
+                <span>Import CSV into {currentChurch.name}</span>
+              </button>
+            )}
+          </div>
         </div>
       ) : (
         <div className={`grid gap-4 sm:gap-5 prayer-cards-grid ${forceSingleColumn ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2'}`}>

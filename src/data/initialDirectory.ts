@@ -152,5 +152,20 @@ export const INITIAL_DIRECTORY_MEMBERS: DirectoryMember[] = [
     familyMembers: 'Spouse: Angela • Children: Marcus, Kendra',
     joinedYear: '2016',
     isPublicInDirectory: true,
+  },
+  // Calvary Baptist Church
+  {
+    id: 'dir-calvary-1',
+    churchId: 'church-calvary-baptist',
+    name: 'Pastor Greg Williamson',
+    roleTitle: 'Senior Pastor',
+    group: 'Pastoral Staff',
+    email: 'pastor@calvarybaptistalcoa.org',
+    phone: '(865) 555-0144',
+    photoUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=400&h=400&q=80',
+    address: '100 W Springbrook Rd, Alcoa, TN',
+    bio: 'Senior Pastor of Calvary Baptist Church in Alcoa, TN. Dedicated to preaching the Word and praying for our church family.',
+    joinedYear: '2015',
+    isPublicInDirectory: true,
   }
 ];

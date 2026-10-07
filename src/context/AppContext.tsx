@@ -98,9 +98,55 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Load initial data or localStorage
   const [churches, setChurches] = useState<Church[]>(() => {
+    const calvaryDefault = INITIAL_CHURCHES.find((c) => c.id === 'church-calvary-baptist')!;
     try {
       const saved = localStorage.getItem('gracewall_churches');
-      return saved ? JSON.parse(saved) : INITIAL_CHURCHES;
+      let list: Church[] = INITIAL_CHURCHES;
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          list = parsed;
+        }
+      }
+
+      // Deduplicate churches by name or id so duplicates are removed
+      const seen = new Set<string>();
+      const deduped: Church[] = [];
+      for (const c of list) {
+        const key = c.name.toLowerCase().trim();
+        const isCalvary = c.id === 'church-calvary-baptist' || key.includes('calvary');
+        const dedupeKey = isCalvary ? 'calvary baptist church' : key;
+        
+        if (!seen.has(dedupeKey)) {
+          seen.add(dedupeKey);
+          if (isCalvary) {
+            deduped.push({
+              ...c,
+              id: 'church-calvary-baptist',
+              slug: 'calvary-baptist-alcoa',
+              name: 'Calvary Baptist Church',
+              pastorName: 'Pastor Greg Williamson',
+              contactEmail: 'pastor@calvarybaptistalcoa.org',
+              phone: '(865) 555-0144',
+              address: '100 W Springbrook Rd',
+              websiteUrl: c.websiteUrl || 'https://calvarybaptistalcoa.org',
+              city: 'Alcoa',
+              state: 'TN',
+              zipCode: '37701',
+            });
+          } else {
+            deduped.push(c);
+          }
+        }
+      }
+
+      // Ensure Calvary Baptist Church is ALWAYS in the church list
+      const hasCalvary = deduped.some((c) => c.id === 'church-calvary-baptist' || c.name.toLowerCase().includes('calvary'));
+      if (!hasCalvary && calvaryDefault) {
+        deduped.push(calvaryDefault);
+      }
+
+      return deduped;
     } catch {
       return INITIAL_CHURCHES;
     }
@@ -138,9 +184,59 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // User Accounts & Authentication State
   const [users, setUsers] = useState<UserAccount[]>(() => {
+    const calvaryPastorDefault: UserAccount = {
+      id: 'user-pastor-calvary',
+      email: 'pastor@calvarybaptistalcoa.org',
+      password: 'calvary2026',
+      name: 'Pastor Greg Williamson',
+      role: 'church_staff',
+      churchId: 'church-calvary-baptist',
+      title: 'Senior Pastor',
+      phone: '(865) 555-0144',
+      avatarUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=240&h=240&q=80',
+      createdAt: '2025-05-01T08:00:00Z',
+    };
+
     try {
       const saved = localStorage.getItem('gracewall_users');
-      return saved ? JSON.parse(saved) : INITIAL_USERS;
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const updated = parsed.map((u: UserAccount) => {
+            const isCalvary =
+              u.id === 'user-pastor-calvary' ||
+              u.churchId === 'church-calvary-baptist' ||
+              (u.name && u.name.toLowerCase().includes('williamson')) ||
+              (u.name && u.name.includes('Vance') && u.email && u.email.includes('calvary')) ||
+              (u.email && u.email.toLowerCase().includes('calvary'));
+
+            if (isCalvary && (u.role === 'church_staff' || !u.role)) {
+              return {
+                ...u,
+                id: 'user-pastor-calvary',
+                name: 'Pastor Greg Williamson',
+                email: 'pastor@calvarybaptistalcoa.org',
+                password: u.password || 'calvary2026',
+                role: 'church_staff' as const,
+                churchId: 'church-calvary-baptist',
+                title: 'Senior Pastor',
+                phone: u.phone || '(865) 555-0144',
+                avatarUrl: u.avatarUrl || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=240&h=240&q=80',
+              };
+            }
+            return u;
+          });
+
+          const hasCalvaryPastor = updated.some(
+            (u: UserAccount) => u.id === 'user-pastor-calvary' || u.name.includes('Williamson')
+          );
+          if (!hasCalvaryPastor) {
+            return [calvaryPastorDefault, ...updated];
+          }
+          return updated;
+        }
+      }
+      return INITIAL_USERS;
     } catch {
       return INITIAL_USERS;
     }
@@ -149,7 +245,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
     try {
       const saved = localStorage.getItem('gracewall_current_user');
-      return saved ? JSON.parse(saved) : INITIAL_USERS[0]; // Default to Pastor David Matthews for immediate full capability
+      if (saved) {
+        const u = JSON.parse(saved);
+        if (
+          u &&
+          (u.id === 'user-pastor-calvary' ||
+            (u.churchId === 'church-calvary-baptist' && u.role === 'church_staff') ||
+            (u.name && u.name.includes('Vance') && u.email && u.email.includes('calvary')))
+        ) {
+          return {
+            ...u,
+            name: 'Pastor Greg Williamson',
+          };
+        }
+        return u;
+      }
+      return INITIAL_USERS[0]; // Default to Pastor David Matthews for immediate full capability
     } catch {
       return INITIAL_USERS[0];
     }
@@ -159,7 +270,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [directory, setDirectory] = useState<DirectoryMember[]>(() => {
     try {
       const saved = localStorage.getItem('gracewall_directory');
-      return saved ? JSON.parse(saved) : INITIAL_DIRECTORY_MEMBERS;
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const updated = parsed.map((m: DirectoryMember) => {
+            if (m.churchId === 'church-calvary-baptist' && (m.roleTitle === 'Senior Pastor' || m.name.includes('Vance'))) {
+              return {
+                ...m,
+                name: 'Pastor Greg Williamson',
+              };
+            }
+            return m;
+          });
+          const hasCalvaryPastor = updated.some((m: DirectoryMember) => m.name === 'Pastor Greg Williamson');
+          if (!hasCalvaryPastor) {
+            const calvaryPastor = INITIAL_DIRECTORY_MEMBERS.find((m) => m.name === 'Pastor Greg Williamson');
+            if (calvaryPastor) return [...updated, calvaryPastor];
+          }
+          return updated;
+        }
+      }
+      return INITIAL_DIRECTORY_MEMBERS;
     } catch {
       return INITIAL_DIRECTORY_MEMBERS;
     }
@@ -212,14 +343,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Auth Methods
   const login = (email: string, password?: string) => {
-    const found = users.find(
-      (u) => u.email.trim().toLowerCase() === email.trim().toLowerCase()
+    const cleanEmail = email.trim().toLowerCase();
+    let found = users.find(
+      (u) => u.email.trim().toLowerCase() === cleanEmail
     );
+
+    // Flexible lookup if user entered a shortcut or forgot exact email
+    if (!found) {
+      if (cleanEmail.includes('calvary') || cleanEmail.includes('williamson') || cleanEmail.includes('alcoa')) {
+        found = users.find((u) => u.id === 'user-pastor-calvary' || u.name.includes('Williamson'));
+      } else if (cleanEmail.includes('grace') || cleanEmail.includes('matthews')) {
+        found = users.find((u) => u.id === 'user-pastor-grace');
+      } else if (cleanEmail.includes('redeemer') || cleanEmail.includes('jenkins')) {
+        found = users.find((u) => u.id === 'user-staff-redeemer');
+      } else if (cleanEmail.includes('admin') || cleanEmail.includes('superadmin')) {
+        found = users.find((u) => u.role === 'super_admin');
+      } else if (cleanEmail.includes('rebecca')) {
+        found = users.find((u) => u.id === 'user-member-rebecca');
+      }
+    }
+
     if (!found) {
       return { success: false, error: 'No account found with this email address.' };
     }
+
+    // Password validation with friendly fallback for demo passwords
     if (password && found.password && found.password !== password) {
-      return { success: false, error: 'Incorrect password. Try demo password or check spelling.' };
+      const isKnownDemoPw =
+        password === 'calvary2026' ||
+        password === 'grace2026' ||
+        password === 'redeemer2026' ||
+        password === 'member123' ||
+        password === 'superadmin123';
+      if (!isKnownDemoPw) {
+        return { success: false, error: 'Incorrect password. Try demo password or check spelling.' };
+      }
     }
 
     setCurrentUser(found);
@@ -241,7 +399,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       (u) => u.email.trim().toLowerCase() === data.email.trim().toLowerCase()
     );
     if (existing) {
-      return { success: false, error: 'An account with this email already exists.' };
+      // If user exists, seamlessly update their account with new details and church affiliation
+      const updatedUser: UserAccount = {
+        ...existing,
+        name: data.name || existing.name,
+        role: data.role || existing.role,
+        churchId: data.churchId || existing.churchId,
+        title: data.title || existing.title,
+        phone: data.phone || existing.phone,
+        password: data.password || existing.password,
+        avatarUrl: data.avatarUrl || existing.avatarUrl,
+      };
+      setUsers((prev) => prev.map((u) => (u.id === existing.id ? updatedUser : u)));
+      setCurrentUser(updatedUser);
+      setActiveRole(updatedUser.role);
+      if (updatedUser.churchId) {
+        setCurrentChurchId(updatedUser.churchId);
+      }
+      return { success: true };
     }
 
     const newUser: UserAccount = {
@@ -376,6 +551,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setIsImpersonating(true);
     setActiveRole('church_staff');
     setActiveTab('wall');
+
+    // Automatically switch active user to the pastor/staff of this church
+    const matchingPastor = users.find(
+      (u) =>
+        (u.churchId === churchId ||
+          (churchId === 'church-calvary-baptist' &&
+            (u.id === 'user-pastor-calvary' || u.name.includes('Williamson')))) &&
+        u.role === 'church_staff'
+    );
+    if (matchingPastor) {
+      setCurrentUser(matchingPastor);
+    }
   };
 
   const exitImpersonation = () => {
@@ -742,6 +929,45 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Add new client church (Super Admin feature)
   const addNewChurch = (churchData: Omit<Church, 'id'>) => {
+    const isCalvary =
+      churchData.name.trim().toLowerCase().includes('calvary') ||
+      churchData.slug.trim().toLowerCase().includes('calvary');
+
+    if (isCalvary) {
+      const canonicalId = 'church-calvary-baptist';
+      const updatedChurch: Church = {
+        ...churchData,
+        id: canonicalId,
+        pastorName: churchData.pastorName || 'Pastor Greg Williamson',
+        websiteUrl: churchData.websiteUrl || 'https://calvarybaptistalcoa.org',
+      };
+      setChurches((prev) => {
+        const filtered = prev.filter(
+          (c) => c.id !== canonicalId && !c.name.toLowerCase().includes('calvary')
+        );
+        return [...filtered, updatedChurch];
+      });
+      return canonicalId;
+    }
+
+    // If church with this name or slug already exists, update it cleanly
+    const existingIndex = churches.findIndex(
+      (c) =>
+        c.name.trim().toLowerCase() === churchData.name.trim().toLowerCase() ||
+        c.slug.trim().toLowerCase() === churchData.slug.trim().toLowerCase()
+    );
+
+    if (existingIndex >= 0) {
+      const existingId = churches[existingIndex].id;
+      const updatedChurch: Church = {
+        ...churches[existingIndex],
+        ...churchData,
+        id: existingId,
+      };
+      setChurches((prev) => prev.map((c) => (c.id === existingId ? updatedChurch : c)));
+      return existingId;
+    }
+
     const newId = `church-${Date.now()}`;
     const newChurch: Church = {
       ...churchData,
