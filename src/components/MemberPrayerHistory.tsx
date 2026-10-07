@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { PrayingHands } from './icons/PrayingHands';
 import {
   Heart,
   RotateCcw,
@@ -47,13 +48,13 @@ export const MemberPrayerHistory: React.FC = () => {
       <div className="max-w-4xl mx-auto px-4 py-12">
         <div className="bg-white rounded-2xl p-8 border border-stone-200 text-center shadow-xs">
           <div className="w-16 h-16 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center mx-auto mb-4 border border-amber-200">
-            <Lock className="w-8 h-8 text-amber-700" />
+            <PrayingHands className="w-8 h-8 text-amber-700" />
           </div>
           <h2 className="text-2xl font-bold font-serif-church text-stone-900 mb-2">
-            Member Prayer History & Resubmission
+            My Prayers & Praises
           </h2>
           <p className="text-stone-600 text-sm max-w-md mx-auto mb-6">
-            Sign in to your church member account to view all prayer requests you’ve previously submitted, see who has prayed for you, and resubmit or update requests on the prayer wall.
+            Sign in to your church member account to view all prayer requests and praises you’ve submitted, celebrate answered prayers, see who has prayed for you, and resubmit or update requests on the prayer wall.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-8">
@@ -140,8 +141,9 @@ export const MemberPrayerHistory: React.FC = () => {
           />
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-xl font-bold font-serif-church text-stone-900">
-                {currentUser.name}’s Prayer Dashboard
+              <h2 className="text-xl font-bold font-serif-church text-stone-900 flex items-center gap-2">
+                <PrayingHands className="w-5 h-5 text-amber-600 shrink-0" />
+                <span>{currentUser.name}’s Prayers & Praises</span>
               </h2>
               <span className="text-xs bg-amber-100 text-amber-800 font-semibold px-2 py-0.5 rounded-full border border-amber-200">
                 {currentUser.title || 'Church Member'}

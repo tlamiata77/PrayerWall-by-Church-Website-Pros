@@ -30,7 +30,8 @@ interface AppContextType {
   directory: DirectoryMember[];
   loginModalOpen: boolean;
   setLoginModalOpen: (open: boolean) => void;
-  openLoginModal: (redirectTab?: AppTab) => void;
+  loginModalInitialMode: 'login' | 'register' | 'register_church';
+  openLoginModal: (redirectTab?: AppTab, mode?: 'login' | 'register' | 'register_church') => void;
   closeLoginModal: () => void;
   login: (email: string, password?: string) => { success: boolean; error?: string };
   logout: () => void;
@@ -114,6 +115,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [submitModalOpen, setSubmitModalOpen] = useState(false);
   const [isModerating, setIsModerating] = useState(false);
   const [loginModalOpen, setLoginModalOpen] = useState(false);
+  const [loginModalInitialMode, setLoginModalInitialMode] = useState<'login' | 'register' | 'register_church'>('login');
 
   // User Accounts & Authentication State
   const [users, setUsers] = useState<UserAccount[]>(() => {
@@ -266,7 +268,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const openLoginModal = (_redirectTab?: AppTab) => {
+  const openLoginModal = (_redirectTab?: AppTab, mode: 'login' | 'register' | 'register_church' = 'login') => {
+    setLoginModalInitialMode(mode);
     setLoginModalOpen(true);
   };
 
@@ -756,6 +759,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         directory,
         loginModalOpen,
         setLoginModalOpen,
+        loginModalInitialMode,
         openLoginModal,
         closeLoginModal,
         login,

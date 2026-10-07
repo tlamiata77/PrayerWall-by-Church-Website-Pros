@@ -19,23 +19,30 @@ import { AuthModal } from './components/AuthModal';
 import { Heart, Sparkles, Shield, Printer, Globe, Code } from 'lucide-react';
 
 const MainContent: React.FC = () => {
-  const { activeTab, currentChurch, loginModalOpen, closeLoginModal } = useApp();
+  const { activeTab, activeRole, currentChurch, loginModalOpen, closeLoginModal, loginModalInitialMode } = useApp();
+
+  const isPastorOrStaff = activeRole === 'church_staff' || activeRole === 'super_admin';
+  const isEmbedSimulator = activeRole === 'embed_view';
 
   return (
     <main className="min-h-screen pb-16">
       {activeTab === 'wall' && <PrayerWall />}
-      {activeTab === 'bulletin' && <PrintableBulletinBuilder />}
-      {activeTab === 'staff' && <StaffModerationPortal />}
+      {activeTab === 'bulletin' && (isPastorOrStaff ? <PrintableBulletinBuilder /> : <PrayerWall />)}
+      {activeTab === 'staff' && (isPastorOrStaff ? <StaffModerationPortal /> : <PrayerWall />)}
       {activeTab === 'directory' && <ChurchDirectory />}
       {activeTab === 'my-prayers' && <MemberPrayerHistory />}
-      {activeTab === 'global' && <GlobalPrayerWall />}
-      {activeTab === 'embed' && <WebsiteEmbedCenter />}
+      {activeTab === 'global' && (isPastorOrStaff ? <GlobalPrayerWall /> : <PrayerWall />)}
+      {activeTab === 'embed' && (isPastorOrStaff || isEmbedSimulator ? <WebsiteEmbedCenter /> : <PrayerWall />)}
 
       {/* Global Submit Prayer Modal */}
       <SubmitPrayerModal />
 
-      {/* User Login & Register Auth Modal */}
-      <AuthModal isOpen={loginModalOpen} onClose={closeLoginModal} />
+      {/* User Login, Member Join & Church Registration Auth Modal */}
+      <AuthModal
+        isOpen={loginModalOpen}
+        onClose={closeLoginModal}
+        defaultMode={loginModalInitialMode}
+      />
     </main>
   );
 };

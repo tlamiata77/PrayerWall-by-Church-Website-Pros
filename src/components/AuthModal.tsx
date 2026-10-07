@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import {
   X,
@@ -14,14 +14,16 @@ import {
   ArrowRight,
   Upload,
   Sparkles,
-  Phone
+  Phone,
+  MapPin,
+  Heart
 } from 'lucide-react';
 import { UserRole } from '../types';
 
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
-  defaultMode?: 'login' | 'register';
+  defaultMode?: 'login' | 'register' | 'register_church';
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({
@@ -35,11 +37,25 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     users,
     churches,
     currentChurchId,
+    setCurrentChurchId,
+    setActiveRole,
+    setActiveTab,
+    addNewChurch,
     switchAccount,
     currentUser,
   } = useApp();
 
-  const [mode, setMode] = useState<'login' | 'register'>(defaultMode);
+  const [mode, setMode] = useState<'login' | 'register' | 'register_church'>(defaultMode);
+
+  useEffect(() => {
+    if (isOpen) {
+      setMode(defaultMode);
+      setError(null);
+      setSuccessMsg(null);
+    }
+  }, [isOpen, defaultMode]);
+
+  // Login & Member Register State
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -48,6 +64,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [selectedRole, setSelectedRole] = useState<UserRole>('congregation_member');
   const [title, setTitle] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
+
+  // Register New Church State
+  const [churchName, setChurchName] = useState('');
+  const [churchDenomination, setChurchDenomination] = useState('');
+  const [churchPastor, setChurchPastor] = useState('');
+  const [churchCity, setChurchCity] = useState('');
+  const [churchState, setChurchState] = useState('');
+  const [churchEmail, setChurchEmail] = useState('');
+  const [churchPassword, setChurchPassword] = useState('');
+  const [churchPhone, setChurchPhone] = useState('');
+  const [churchTagline, setChurchTagline] = useState('');
+
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
@@ -103,6 +131,82 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       }, 600);
     } else {
       setError(res.error || 'Failed to create account');
+    }
+  };
+
+  const handleRegisterChurch = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    if (!churchName.trim()) {
+      setError('Church name is required');
+      return;
+    }
+    if (!churchPastor.trim()) {
+      setError('Senior Pastor / Ministry Leader name is required');
+      return;
+    }
+    if (!churchEmail.trim() || !churchEmail.includes('@')) {
+      setError('A valid pastoral contact email is required');
+      return;
+    }
+    if (!churchPassword || churchPassword.length < 4) {
+      setError('Password must be at least 4 characters');
+      return;
+    }
+
+    const slug = churchName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    const newChurchId = addNewChurch({
+      slug: slug || `church-${Date.now()}`,
+      name: churchName.trim(),
+      tagline: churchTagline.trim() || 'Growing in faith, grounded in grace',
+      denomination: churchDenomination.trim() || 'Non-Denominational',
+      pastorName: churchPastor.trim(),
+      contactEmail: churchEmail.trim(),
+      phone: churchPhone.trim() || '(555) 012-3456',
+      address: '100 Main Street',
+      city: churchCity.trim() || 'Dallas',
+      state: churchState.trim() || 'TX',
+      websiteUrl: `https://${slug || 'church'}.org`,
+      themeColor: 'teal_pink',
+      primaryColor: '#4eb8b9',
+      accentColor: '#c219b0',
+      welcomeMessage: `Welcome to the ${churchName.trim()} prayer wall. How may our congregation stand with you in faith today?`,
+      scriptureVerse: 'Do not be anxious about anything, but in every situation, by prayer and petition, with thanksgiving, present your requests to God. — Philippians 4:6',
+      bulletinTitle: `${churchName.trim()} Weekly Intercessory Prayer List`,
+      settings: {
+        allowAnonymous: true,
+        requireStaffReviewBeforePublish: false,
+        autoApproveHighScores: true,
+        enablePraiseUpdates: true,
+        defaultPrintColumns: 2,
+        defaultWallLayout: 'grid',
+      },
+    });
+
+    // Create the Senior Pastor account with staff privileges
+    const res = register({
+      email: churchEmail.trim(),
+      password: churchPassword,
+      name: churchPastor.trim(),
+      phone: churchPhone.trim(),
+      churchId: newChurchId,
+      role: 'church_staff',
+      title: 'Senior Pastor',
+      avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=240&h=240&q=80',
+    });
+
+    if (res.success) {
+      setCurrentChurchId(newChurchId);
+      setActiveRole('church_staff');
+      setActiveTab('wall');
+      setSuccessMsg(`Welcome! "${churchName.trim()}" is now registered. You are logged in with pastoral administration rights.`);
+      setTimeout(() => {
+        onClose();
+        setSuccessMsg(null);
+      }, 1000);
+    } else {
+      setError(res.error || 'Failed to create pastor admin account');
     }
   };
 
@@ -217,21 +321,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </div>
         </div>
 
-        {/* Mode Switch Tabs */}
-        <div className="flex border-b border-stone-200">
+        {/* Mode Switch Tabs: 3 clear options */}
+        <div className="flex border-b border-stone-200 bg-stone-50/50">
           <button
             type="button"
             onClick={() => {
               setMode('login');
               setError(null);
             }}
-            className={`flex-1 py-3 text-sm font-semibold text-center border-b-2 transition-all cursor-pointer ${
+            className={`flex-1 py-3 text-xs sm:text-sm font-semibold text-center border-b-2 transition-all cursor-pointer ${
               mode === 'login'
-                ? 'border-amber-600 text-amber-700 bg-amber-50/30'
+                ? 'border-amber-600 text-amber-700 bg-white font-bold'
                 : 'border-transparent text-stone-500 hover:text-stone-800'
             }`}
           >
-            Sign In with Password
+            Sign In
           </button>
           <button
             type="button"
@@ -239,13 +343,28 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               setMode('register');
               setError(null);
             }}
-            className={`flex-1 py-3 text-sm font-semibold text-center border-b-2 transition-all cursor-pointer ${
+            className={`flex-1 py-3 text-xs sm:text-sm font-semibold text-center border-b-2 transition-all cursor-pointer ${
               mode === 'register'
-                ? 'border-amber-600 text-amber-700 bg-amber-50/30'
+                ? 'border-amber-600 text-amber-700 bg-white font-bold'
                 : 'border-transparent text-stone-500 hover:text-stone-800'
             }`}
           >
-            Register New Account
+            Join as Member
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setMode('register_church');
+              setError(null);
+            }}
+            className={`flex-1 py-3 text-xs sm:text-sm font-semibold text-center border-b-2 transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+              mode === 'register_church'
+                ? 'border-[#4eb8b9] text-[#1e6a6b] bg-white font-bold'
+                : 'border-transparent text-stone-600 hover:text-stone-900'
+            }`}
+          >
+            <ChurchIcon className="w-3.5 h-3.5 text-[#4eb8b9]" />
+            <span>Register Church</span>
           </button>
         </div>
 
@@ -485,6 +604,170 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 >
                   <ArrowRight className="w-4 h-4" />
                   <span>Create Account & Log In</span>
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* TAB 3: REGISTER NEW CHURCH */}
+          {mode === 'register_church' && (
+            <form onSubmit={handleRegisterChurch} className="space-y-3.5">
+              <div className="p-3 bg-[#4eb8b9]/10 border border-[#4eb8b9]/30 rounded-xl flex items-start gap-2.5 text-xs text-stone-800 mb-1">
+                <ChurchIcon className="w-5 h-5 text-[#4eb8b9] shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold text-[#1e6a6b] block">
+                    Launch Your Church's Prayer Wall & Suite
+                  </span>
+                  <p className="text-[11px] text-stone-600 mt-0.5 leading-relaxed">
+                    Instantly provisions your congregation's dedicated prayer wall, printable Sunday bulletin builder, photo directory, and pastoral moderation portal.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-stone-700 mb-1">
+                    Church Name *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={churchName}
+                    onChange={(e) => setChurchName(e.target.value)}
+                    placeholder="e.g. Living Hope Church"
+                    className="w-full px-3 py-2 text-xs rounded-lg border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#4eb8b9] font-medium"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-stone-700 mb-1">
+                    Denomination / Affiliation
+                  </label>
+                  <input
+                    type="text"
+                    value={churchDenomination}
+                    onChange={(e) => setChurchDenomination(e.target.value)}
+                    placeholder="e.g. Non-Denominational, Baptist, Reformed"
+                    className="w-full px-3 py-2 text-xs rounded-lg border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#4eb8b9]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-stone-700 mb-1">
+                    Senior Pastor / Leader Name *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={churchPastor}
+                    onChange={(e) => setChurchPastor(e.target.value)}
+                    placeholder="e.g. Pastor David Walker"
+                    className="w-full px-3 py-2 text-xs rounded-lg border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#4eb8b9]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-stone-700 mb-1">
+                    Pastoral Care Phone (Optional)
+                  </label>
+                  <input
+                    type="tel"
+                    value={churchPhone}
+                    onChange={(e) => setChurchPhone(e.target.value)}
+                    placeholder="(555) 123-4567"
+                    className="w-full px-3 py-2 text-xs rounded-lg border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#4eb8b9]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-stone-700 mb-1">
+                    Pastoral Login Email *
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={churchEmail}
+                    onChange={(e) => setChurchEmail(e.target.value)}
+                    placeholder="pastor@churchname.org"
+                    className="w-full px-3 py-2 text-xs rounded-lg border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#4eb8b9]"
+                  />
+                  <span className="text-[10px] text-stone-400 mt-0.5 block">
+                    Used to log in as Senior Pastor
+                  </span>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-stone-700 mb-1">
+                    Admin Password *
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    value={churchPassword}
+                    onChange={(e) => setChurchPassword(e.target.value)}
+                    placeholder="At least 4 characters"
+                    className="w-full px-3 py-2 text-xs rounded-lg border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#4eb8b9]"
+                  />
+                  <span className="text-[10px] text-stone-400 mt-0.5 block">
+                    Secures private prayers & staff moderation
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-stone-700 mb-1">
+                    City *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={churchCity}
+                    onChange={(e) => setChurchCity(e.target.value)}
+                    placeholder="Dallas"
+                    className="w-full px-3 py-2 text-xs rounded-lg border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#4eb8b9]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-stone-700 mb-1">
+                    State *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={churchState}
+                    onChange={(e) => setChurchState(e.target.value)}
+                    placeholder="TX"
+                    className="w-full px-3 py-2 text-xs rounded-lg border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#4eb8b9]"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  Tagline / Welcome Vision (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={churchTagline}
+                  onChange={(e) => setChurchTagline(e.target.value)}
+                  placeholder="e.g. Growing in faith, grounded in grace"
+                  className="w-full px-3 py-2 text-xs rounded-lg border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#4eb8b9]"
+                />
+              </div>
+
+              <div className="pt-2">
+                <button
+                  type="submit"
+                  className="w-full py-2.5 px-4 bg-[#4eb8b9] hover:bg-[#3ea0a1] text-white font-bold rounded-lg text-sm shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <ChurchIcon className="w-4 h-4" />
+                  <span>Register Church & Launch Prayer Wall</span>
                 </button>
               </div>
             </form>
