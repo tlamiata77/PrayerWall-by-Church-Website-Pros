@@ -41,10 +41,12 @@ export const AppNavigation: React.FC = () => {
     currentUser,
     logout,
     openLoginModal,
-    users,
-    switchAccount,
     requests,
+    isSuperAdmin,
+    notifications,
   } = useApp();
+
+  const unreadNotifications = notifications.filter((n) => !n.readAt).length;
 
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const [brandingModalOpen, setBrandingModalOpen] = useState(false);
@@ -63,14 +65,7 @@ export const AppNavigation: React.FC = () => {
   }, [isPastorOrStaff, isEmbedSimulator, activeTab, setActiveTab]);
 
   // Number of prayers submitted by current user
-  const userSubmissionsCount = currentUser
-    ? requests.filter(
-        (r) =>
-          r.userId === currentUser.id ||
-          (r.requesterEmail && r.requesterEmail.toLowerCase() === currentUser.email.toLowerCase()) ||
-          (r.requesterName && r.requesterName.toLowerCase() === currentUser.name.toLowerCase())
-      ).length
-    : 0;
+  const userSubmissionsCount = currentUser ? requests.filter((r) => r.userId === currentUser.id).length : 0;
 
   return (
     <header className="bg-white border-b border-stone-200 sticky top-0 z-40 shadow-xs no-print">
@@ -88,14 +83,13 @@ export const AppNavigation: React.FC = () => {
             </span>
           </div>
 
-          {/* Quick Persona Switcher for easy testing */}
+          {/* Super admin preview: see the app as a pastor, member, or embedded wall */}
+          {isSuperAdmin && (
           <div className="flex items-center gap-2 max-w-full overflow-x-auto pb-0.5 sm:pb-0">
-            <span className="text-stone-400 text-[11px] hidden md:inline shrink-0">Quick Role Mode:</span>
+            <span className="text-stone-400 text-[11px] hidden md:inline shrink-0">Preview as:</span>
             <div className="bg-stone-800 p-0.5 rounded-lg flex items-center gap-0.5 border border-stone-700 shrink-0">
               <button
                 onClick={() => {
-                  const admin = users.find((u) => u.role === 'super_admin');
-                  if (admin) switchAccount(admin.id);
                   setActiveRole('super_admin');
                   setActiveTab('staff');
                 }}
@@ -108,12 +102,15 @@ export const AppNavigation: React.FC = () => {
               >
                 <Crown className="w-3.5 h-3.5" />
                 <span className="font-medium">Super Admin</span>
+                {unreadNotifications > 0 && (
+                  <span className="bg-rose-500 text-white text-[9px] font-bold px-1.5 rounded-full">
+                    {unreadNotifications}
+                  </span>
+                )}
               </button>
 
               <button
                 onClick={() => {
-                  const pastor = users.find((u) => u.role === 'church_staff' && u.churchId === currentChurchId) || users[0];
-                  if (pastor) switchAccount(pastor.id);
                   setActiveRole('church_staff');
                   if (activeTab === 'global' && activeRole === 'super_admin') {
                     setActiveTab('wall');
@@ -132,8 +129,6 @@ export const AppNavigation: React.FC = () => {
 
               <button
                 onClick={() => {
-                  const member = users.find((u) => u.role === 'congregation_member' && u.churchId === currentChurchId) || users[2];
-                  if (member) switchAccount(member.id);
                   setActiveRole('congregation_member');
                 }}
                 className={`px-2.5 py-1 rounded text-xs flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
@@ -164,6 +159,7 @@ export const AppNavigation: React.FC = () => {
               </button>
             </div>
           </div>
+          )}
         </div>
       </div>
 
@@ -201,19 +197,7 @@ export const AppNavigation: React.FC = () => {
                       if (e.target.value === 'REGISTER_NEW_CHURCH') {
                         openLoginModal(undefined, 'register_church');
                       } else {
-                        const targetId = e.target.value;
-                        setCurrentChurchId(targetId);
-                        // Automatically switch to that church's pastor account for instant access
-                        const matchingPastor = users.find(
-                          (u) =>
-                            (u.churchId === targetId ||
-                              (targetId === 'church-calvary-baptist' &&
-                                (u.id === 'user-pastor-calvary' || u.name.includes('Williamson')))) &&
-                            u.role === 'church_staff'
-                        );
-                        if (matchingPastor) {
-                          switchAccount(matchingPastor.id);
-                        }
+                        setCurrentChurchId(e.target.value);
                       }
                     }}
                     className="appearance-none bg-stone-100 hover:bg-stone-200/80 text-stone-700 text-xs font-semibold rounded-md pl-2 pr-6 py-1 border border-stone-300/80 cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#4eb8b9]"
@@ -222,7 +206,7 @@ export const AppNavigation: React.FC = () => {
                     <optgroup label="Churches on Network">
                       {churches.map((church) => (
                         <option key={church.id} value={church.id}>
-                          Switch: {church.name} ({church.city}, {church.state}){church.pastorName ? ` • ${church.pastorName}` : ''}
+                          {church.name}{church.city ? ` (${church.city}, ${church.state})` : ''}
                         </option>
                       ))}
                     </optgroup>
@@ -246,7 +230,7 @@ export const AppNavigation: React.FC = () => {
                 </button>
 
                 {/* Quick Branding & Theme Edit Shortcut for Staff */}
-                {(activeRole === 'church_staff' || activeRole === 'super_admin' || currentUser?.role === 'church_staff') && (
+                {(activeRole === 'church_staff' || activeRole === 'super_admin') && (
                   <button
                     onClick={() => setBrandingModalOpen(true)}
                     className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg border border-stone-200 bg-stone-50 hover:bg-stone-100 text-stone-700 transition-colors cursor-pointer"
@@ -329,7 +313,7 @@ export const AppNavigation: React.FC = () => {
                               : 'bg-emerald-100 text-emerald-800'
                           }`}
                         >
-                          {currentUser.title || currentUser.role}
+                          {currentUser.title || currentUser.role}{currentUser.role === 'congregation_member' && !currentUser.approved ? ' • awaiting approval' : ''}
                         </span>
                         <span className="text-[10px] text-stone-400">
                           {userSubmissionsCount} submitted prayers
@@ -366,7 +350,7 @@ export const AppNavigation: React.FC = () => {
                       <span>Church Directory</span>
                     </button>
 
-                    {(activeRole === 'church_staff' || activeRole === 'super_admin' || currentUser?.role === 'church_staff') && (
+                    {(activeRole === 'church_staff' || activeRole === 'super_admin') && (
                       <button
                         onClick={() => {
                           setBrandingModalOpen(true);
@@ -378,90 +362,6 @@ export const AppNavigation: React.FC = () => {
                         <span>Church Logo & Color Theme</span>
                       </button>
                     )}
-
-                    {/* 1-Click Church Accounts Switching */}
-                    <div className="border-t border-stone-100 my-1 pt-1.5 px-1">
-                      <div className="text-[10px] font-bold text-stone-400 uppercase tracking-wider px-2 py-1 flex items-center justify-between">
-                        <span>Church Portals</span>
-                        <span className="text-[9px] text-amber-600 font-semibold">1-Click</span>
-                      </div>
-
-                      <button
-                        onClick={() => {
-                          const pastor = users.find(
-                            (u) =>
-                              u.id === 'user-pastor-calvary' ||
-                              u.churchId === 'church-calvary-baptist' ||
-                              u.name.toLowerCase().includes('williamson')
-                          );
-                          if (pastor) {
-                            switchAccount(pastor.id);
-                          }
-                          setCurrentChurchId('church-calvary-baptist');
-                          setActiveRole('church_staff');
-                          setUserDropdownOpen(false);
-                        }}
-                        className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs flex items-center justify-between cursor-pointer transition-colors ${
-                          currentChurchId === 'church-calvary-baptist'
-                            ? 'bg-amber-50 text-amber-900 font-bold border border-amber-300'
-                            : 'hover:bg-stone-50 text-stone-700'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2 min-w-0">
-                          <ChurchIcon className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                          <div className="truncate">
-                            <span className="block font-semibold">Calvary Baptist</span>
-                            <span className="text-[10px] text-stone-500 block">Pastor Greg Williamson</span>
-                          </div>
-                        </div>
-                        {currentChurchId === 'church-calvary-baptist' ? (
-                          <span className="text-[9px] bg-amber-200 text-amber-800 px-1 py-0.2 rounded font-bold">Active</span>
-                        ) : (
-                          <span className="text-[9px] text-stone-400">Login</span>
-                        )}
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          const pastor = users.find((u) => u.id === 'user-pastor-grace');
-                          if (pastor) {
-                            switchAccount(pastor.id);
-                          }
-                          setCurrentChurchId('church-grace');
-                          setActiveRole('church_staff');
-                          setUserDropdownOpen(false);
-                        }}
-                        className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs flex items-center justify-between cursor-pointer transition-colors ${
-                          currentChurchId === 'church-grace'
-                            ? 'bg-amber-50 text-amber-900 font-bold border border-amber-300'
-                            : 'hover:bg-stone-50 text-stone-700'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2 min-w-0">
-                          <ChurchIcon className="w-3.5 h-3.5 text-[#4eb8b9] shrink-0" />
-                          <div className="truncate">
-                            <span className="block font-semibold">Grace Fellowship</span>
-                            <span className="text-[10px] text-stone-500 block">Pastor David Matthews</span>
-                          </div>
-                        </div>
-                        {currentChurchId === 'church-grace' ? (
-                          <span className="text-[9px] bg-amber-200 text-amber-800 px-1 py-0.2 rounded font-bold">Active</span>
-                        ) : (
-                          <span className="text-[9px] text-stone-400">Login</span>
-                        )}
-                      </button>
-                    </div>
-
-                    <button
-                      onClick={() => {
-                        openLoginModal();
-                        setUserDropdownOpen(false);
-                      }}
-                      className="w-full text-left px-3 py-2 text-xs font-semibold text-stone-700 hover:bg-stone-50 hover:text-stone-900 rounded-lg flex items-center gap-2 transition-colors cursor-pointer"
-                    >
-                      <KeyRound className="w-3.5 h-3.5 text-stone-500" />
-                      <span>Switch / Demo Logins</span>
-                    </button>
 
                     <button
                       onClick={() => {

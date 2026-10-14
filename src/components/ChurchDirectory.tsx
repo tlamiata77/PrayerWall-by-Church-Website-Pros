@@ -40,6 +40,7 @@ export const ChurchDirectory: React.FC = () => {
     activeRole,
     currentUser,
     setSubmitModalOpen,
+    openLoginModal,
   } = useApp();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -196,11 +197,47 @@ export const ChurchDirectory: React.FC = () => {
     }
   };
 
-  const canManageDirectory =
-    activeRole === 'church_staff' ||
-    activeRole === 'super_admin' ||
-    currentUser?.role === 'church_staff' ||
-    currentUser?.role === 'super_admin';
+  const canManageDirectory = activeRole === 'church_staff' || activeRole === 'super_admin';
+
+  // The database only shares directory contact details with approved members of this church
+  const canViewDirectory =
+    canManageDirectory || Boolean(currentUser?.approved && currentUser.churchId === currentChurch.id);
+
+  if (!canViewDirectory) {
+    return (
+      <div className="max-w-3xl mx-auto px-4 py-12">
+        <div className="bg-white rounded-2xl p-8 border border-stone-200 shadow-xs text-center space-y-4">
+          <div className="w-16 h-16 rounded-2xl bg-blue-50 flex items-center justify-center mx-auto border border-blue-200">
+            <Users className="w-8 h-8 text-blue-600" />
+          </div>
+          <h2 className="font-serif-church text-2xl font-bold text-stone-900">{currentChurch.name} Directory</h2>
+          {!currentUser ? (
+            <>
+              <p className="text-stone-600 text-sm max-w-md mx-auto">
+                The church directory is private to members. Sign in, or create a member account and a pastor will
+                approve your access.
+              </p>
+              <button
+                onClick={() => openLoginModal('directory')}
+                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold cursor-pointer"
+              >
+                Sign In or Join
+              </button>
+            </>
+          ) : currentUser.churchId !== currentChurch.id ? (
+            <p className="text-stone-600 text-sm max-w-md mx-auto">
+              Your account belongs to a different church, so this church's directory isn't available to you.
+            </p>
+          ) : (
+            <p className="text-stone-600 text-sm max-w-md mx-auto">
+              Thanks for joining, {currentUser.name.split(' ')[0]}! A pastor or staff member needs to approve your
+              account before you can see the member directory. You can still post and track prayer requests now.
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">

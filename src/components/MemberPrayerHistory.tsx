@@ -32,8 +32,6 @@ export const MemberPrayerHistory: React.FC = () => {
     togglePrayerAnswered,
     setSubmitModalOpen,
     currentChurch,
-    users,
-    switchAccount,
   } = useApp();
 
   const [filter, setFilter] = useState<'all' | 'active' | 'answered' | 'flagged' | 'private'>('all');
@@ -63,19 +61,9 @@ export const MemberPrayerHistory: React.FC = () => {
               className="w-full sm:w-auto px-6 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-lg text-sm shadow-xs transition-all cursor-pointer flex items-center justify-center gap-2"
             >
               <Lock className="w-4 h-4" />
-              <span>Sign In with Password</span>
+              <span>Sign In</span>
             </button>
 
-            <button
-              onClick={() => {
-                const rebecca = users.find((u) => u.email === 'rebecca.s@gmail.com') || users[2];
-                if (rebecca) switchAccount(rebecca.id);
-              }}
-              className="w-full sm:w-auto px-5 py-2.5 bg-stone-100 hover:bg-stone-200 text-stone-800 font-semibold rounded-lg text-sm border border-stone-300 transition-all cursor-pointer flex items-center justify-center gap-2"
-            >
-              <Sparkles className="w-4 h-4 text-amber-600" />
-              <span>Demo Login as Rebecca Sterling (Has Requests)</span>
-            </button>
           </div>
 
           <div className="border-t border-stone-100 pt-6">
@@ -88,19 +76,8 @@ export const MemberPrayerHistory: React.FC = () => {
     );
   }
 
-  // Filter requests submitted by the logged in user
-  const userRequests = requests.filter((r) => {
-    const matchesId = r.userId && r.userId === currentUser.id;
-    const matchesEmail =
-      r.requesterEmail &&
-      currentUser.email &&
-      r.requesterEmail.trim().toLowerCase() === currentUser.email.trim().toLowerCase();
-    const matchesName =
-      r.requesterName &&
-      currentUser.name &&
-      r.requesterName.trim().toLowerCase() === currentUser.name.trim().toLowerCase();
-    return matchesId || matchesEmail || matchesName;
-  });
+  // Requests submitted while signed in to this account
+  const userRequests = requests.filter((r) => r.userId === currentUser.id);
 
   const displayedRequests = userRequests.filter((r) => {
     if (filter === 'active') return r.status === 'approved' && !r.isAnswered;

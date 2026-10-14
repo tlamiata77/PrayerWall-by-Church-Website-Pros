@@ -20,20 +20,46 @@ import { ImportPrayersModal } from './components/ImportPrayersModal';
 import { Heart, Sparkles, Shield, Printer, Globe, Code } from 'lucide-react';
 
 const MainContent: React.FC = () => {
-  const { activeTab, activeRole, currentChurch, loginModalOpen, closeLoginModal, loginModalInitialMode } = useApp();
+  const {
+    activeTab,
+    activeRole,
+    loginModalOpen,
+    closeLoginModal,
+    loginModalInitialMode,
+    isLoading,
+    dataError,
+    clearDataError,
+  } = useApp();
 
   const isPastorOrStaff = activeRole === 'church_staff' || activeRole === 'super_admin';
   const isEmbedSimulator = activeRole === 'embed_view';
 
   return (
     <main className="min-h-screen pb-16">
-      {activeTab === 'wall' && <PrayerWall />}
-      {activeTab === 'bulletin' && (isPastorOrStaff ? <PrintableBulletinBuilder /> : <PrayerWall />)}
-      {activeTab === 'staff' && (isPastorOrStaff ? <StaffModerationPortal /> : <PrayerWall />)}
-      {activeTab === 'directory' && <ChurchDirectory />}
-      {activeTab === 'my-prayers' && <MemberPrayerHistory />}
-      {activeTab === 'global' && (isPastorOrStaff ? <GlobalPrayerWall /> : <PrayerWall />)}
-      {activeTab === 'embed' && (isPastorOrStaff || isEmbedSimulator ? <WebsiteEmbedCenter /> : <PrayerWall />)}
+      {dataError && (
+        <div className="max-w-7xl mx-auto px-4 pt-4 no-print">
+          <div className="bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-xl px-4 py-2.5 flex items-center justify-between gap-3">
+            <span>{dataError}</span>
+            <button onClick={clearDataError} className="font-bold cursor-pointer" aria-label="Dismiss">
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
+      {isLoading && (
+        <div className="max-w-7xl mx-auto px-4 py-16 text-center text-sm text-stone-500 no-print">
+          Loading prayer wall...
+        </div>
+      )}
+
+      {!isLoading && activeTab === 'wall' && <PrayerWall />}
+      {!isLoading && activeTab === 'bulletin' && (isPastorOrStaff ? <PrintableBulletinBuilder /> : <PrayerWall />)}
+      {!isLoading && activeTab === 'staff' && (isPastorOrStaff ? <StaffModerationPortal /> : <PrayerWall />)}
+      {!isLoading && activeTab === 'directory' && <ChurchDirectory />}
+      {!isLoading && activeTab === 'my-prayers' && <MemberPrayerHistory />}
+      {!isLoading && activeTab === 'global' && (isPastorOrStaff ? <GlobalPrayerWall /> : <PrayerWall />)}
+      {!isLoading && activeTab === 'embed' && (isPastorOrStaff || isEmbedSimulator ? <WebsiteEmbedCenter /> : <PrayerWall />)}
 
       {/* Global Submit Prayer Modal */}
       <SubmitPrayerModal />
