@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { RequestCategory, PrayerRequest } from '../types';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
 import { isDateString } from '../utils/csvParser';
+import { getChurchTheme } from '../utils/theme';
 import {
   Printer,
   Download,
@@ -35,6 +34,15 @@ import {
   Upload,
   LayoutGrid
 } from 'lucide-react';
+
+type PaperSize = 'letter' | 'legal' | 'half_letter';
+
+// Width/height are for the tall (portrait) page; margin is the printed edge on every side
+const PAPER_SIZES: Record<PaperSize, { label: string; width: number; height: number; margin: number }> = {
+  letter: { label: 'Letter 8.5 × 11"', width: 8.5, height: 11, margin: 0.5 },
+  legal: { label: 'Legal 8.5 × 14"', width: 8.5, height: 14, margin: 0.5 },
+  half_letter: { label: 'Bulletin insert 5.5 × 8.5"', width: 5.5, height: 8.5, margin: 0.35 },
+};
 
 export const PrintableBulletinBuilder: React.FC = () => {
   const {
@@ -68,6 +76,9 @@ export const PrintableBulletinBuilder: React.FC = () => {
   const [includeAnsweredPraises, setIncludeAnsweredPraises] = useState(true);
   const [includeContactInfo, setIncludeContactInfo] = useState(false);
   const [showCheckboxes, setShowCheckboxes] = useState(false);
+  const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait');
+  const [paperSize, setPaperSize] = useState<PaperSize>('letter');
+  const [inkMode, setInkMode] = useState<'color' | 'black'>('color');
   const [dateFilter, setDateFilter] = useState<'all' | '14days' | '30days'>('all');
   
   // Print Archive View Mode: 'active' (what will print this Sunday) vs 'archived' (past printed items)
@@ -98,7 +109,6 @@ export const PrintableBulletinBuilder: React.FC = () => {
   const [editText, setEditText] = useState('');
   const [isPolishingAI, setIsPolishingAI] = useState(false);
   const [aiCompressedCount, setAiCompressedCount] = useState<number | null>(null);
-  const [isExportingPDF, setIsExportingPDF] = useState(false);
   const [pdfProgressMessage, setPdfProgressMessage] = useState<string | null>(null);
 
   // High-Volume Presets
@@ -252,6 +262,33 @@ export const PrintableBulletinBuilder: React.FC = () => {
 
   const pageFit = calculateEstimatedPages();
 
+  // Real page geometry for the chosen paper and orientation (inches)
+  const paper = PAPER_SIZES[paperSize];
+  const pageWidthIn = orientation === 'portrait' ? paper.width : paper.height;
+  const pageHeightIn = orientation === 'portrait' ? paper.height : paper.width;
+  const maxColumnsFor = (size: PaperSize, orient: 'portrait' | 'landscape') => {
+    const p = PAPER_SIZES[size];
+    const contentWidth = (orient === 'portrait' ? p.width : p.height) - 2 * p.margin;
+    return Math.max(1, Math.min(4, Math.floor(contentWidth / 2.2)));
+  };
+  const columnCountOf = (mode: typeof layoutMode) =>
+    mode === 'columns_1' ? 1 : mode === 'columns_2' ? 2 : mode === 'columns_3' ? 3 : mode === 'columns_4' ? 4 : null;
+  const columnsMode = (n: number) => (['columns_1', 'columns_2', 'columns_3', 'columns_4'] as const)[n - 1];
+
+  // Wide pages get an extra column, tall pages one fewer, never more than the paper can fit
+  const changePage = (nextOrientation: 'portrait' | 'landscape', nextPaper: PaperSize) => {
+    const cols = columnCountOf(layoutMode);
+    if (cols !== null) {
+      const shift = nextOrientation === orientation ? 0 : nextOrientation === 'landscape' ? 1 : -1;
+      const next = Math.max(1, Math.min(maxColumnsFor(nextPaper, nextOrientation), cols + shift));
+      setLayoutMode(columnsMode(next));
+    }
+    setOrientation(nextOrientation);
+    setPaperSize(nextPaper);
+  };
+
+  const brandColor = getChurchTheme(currentChurch).primary;
+
   // Helper to extract clean dignified summary text without date strings
   const getItemSummaryText = (item: PrayerRequest) => {
     let summary = useCondensedSummaries && item.bulletinSummary ? item.bulletinSummary : item.title;
@@ -262,72 +299,16 @@ export const PrintableBulletinBuilder: React.FC = () => {
     return summary.replace(/^\[[^\]]+\]\s*/, '').trim();
   };
 
-  // High-Quality PDF Downloader using html2canvas & jsPDF
-  const handleDownloadPDF = async () => {
-    setIsExportingPDF(true);
-    setPdfProgressMessage('Preparing high-resolution PDF...');
-    try {
-      const element = document.querySelector('.printable-area') as HTMLElement;
-      if (!element) {
-        window.print();
-        return;
-      }
-
-      setPdfProgressMessage('Rendering print typography...');
-      const canvas = await html2canvas(element, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff',
-        scrollX: 0,
-        scrollY: 0,
-        windowWidth: 1200,
-        onclone: (clonedDoc) => {
-          const el = clonedDoc.querySelector('.printable-area') as HTMLElement;
-          if (el) {
-            el.style.boxShadow = 'none';
-            el.style.transform = 'none';
-          }
-        },
-      });
-
-      setPdfProgressMessage('Compiling PDF pages...');
-      const imgData = canvas.toDataURL('image/jpeg', 0.96);
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'pt',
-        format: 'letter', // 612 x 792 pt
-      });
-
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-      const imgWidth = pdfWidth;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-      let heightLeft = imgHeight;
-      let position = 0;
-
-      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pdfHeight;
-
-      while (heightLeft > 5) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pdfHeight;
-      }
-
-      const safeName = (currentChurch.name || 'Church').replace(/[^a-zA-Z0-9]/g, '_');
-      const dateStr = new Date().toISOString().split('T')[0];
-      pdf.save(`${safeName}_Sunday_Prayer_Bulletin_${dateStr}.pdf`);
-      setPdfProgressMessage('PDF Downloaded successfully!');
-      setTimeout(() => setPdfProgressMessage(null), 3500);
-    } catch (err) {
-      console.error('Error downloading PDF:', err);
-      window.print();
-    } finally {
-      setIsExportingPDF(false);
-    }
+  // Save as PDF uses the browser's own print engine, which lays out real text and
+  // breaks pages between prayer requests (the old html2canvas screenshot approach
+  // crashed on Tailwind's oklch colors and sliced lines in half at page edges).
+  const handleDownloadPDF = () => {
+    setPdfProgressMessage(
+      'In the print window, set Destination (or the PDF menu on Mac) to "Save as PDF", then click Save.'
+    );
+    setTimeout(() => setPdfProgressMessage(null), 12000);
+    // Let the hint render before the print dialog blocks the page
+    setTimeout(() => window.print(), 50);
   };
 
   // AI Auto-Categorize Bulletin
@@ -459,7 +440,7 @@ export const PrintableBulletinBuilder: React.FC = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
+    <div className="max-w-7xl mx-auto px-4 py-6 space-y-6 print:p-0 print:max-w-none">
       {/* Top Banner: High-Volume 75 Requests Optimizer Bar */}
       <div className="bg-stone-900 text-stone-100 rounded-2xl p-5 shadow-md border border-stone-800 no-print space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
@@ -558,12 +539,11 @@ export const PrintableBulletinBuilder: React.FC = () => {
             {/* Direct Download PDF Button */}
             <button
               onClick={handleDownloadPDF}
-              disabled={isExportingPDF}
-              className="flex items-center gap-2 px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold shadow-md transition-all cursor-pointer disabled:opacity-60"
-              title="Save & Download this Sunday Bulletin directly as a PDF document"
+              className="flex items-center gap-2 px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold shadow-md transition-all cursor-pointer"
+              title="Save this Sunday Bulletin as a PDF file (choose &quot;Save as PDF&quot; in the print window)"
             >
-              <Download className={`w-4 h-4 ${isExportingPDF ? 'animate-bounce' : ''}`} />
-              <span>{isExportingPDF ? 'Generating PDF...' : 'Download PDF'}</span>
+              <Download className="w-4 h-4" />
+              <span>Save as PDF</span>
             </button>
 
             {/* Print Bulletin */}
@@ -582,7 +562,7 @@ export const PrintableBulletinBuilder: React.FC = () => {
         {pdfProgressMessage && (
           <div className="bg-blue-950/90 border border-blue-400/60 text-blue-200 text-xs px-3.5 py-2.5 rounded-xl flex items-center justify-between gap-2 shadow-xs">
             <div className="flex items-center gap-2">
-              <Download className="w-4 h-4 text-blue-300 animate-pulse shrink-0" />
+              <Download className="w-4 h-4 text-blue-300 shrink-0" />
               <span className="font-semibold">{pdfProgressMessage}</span>
             </div>
             <button
@@ -949,6 +929,65 @@ export const PrintableBulletinBuilder: React.FC = () => {
                 Inline Flow
               </button>
             </div>
+
+            <div className="flex items-center gap-1.5 pt-1 text-[11px]">
+              <span className="text-stone-500 w-9">Page:</span>
+              <button
+                onClick={() => changePage('portrait', paperSize)}
+                className={`flex-1 py-1 text-center rounded border cursor-pointer ${
+                  orientation === 'portrait' ? 'bg-blue-700 text-white font-bold' : 'bg-stone-50 text-stone-600'
+                }`}
+                title="Portrait: taller than wide"
+              >
+                ▯ Tall
+              </button>
+              <button
+                onClick={() => changePage('landscape', paperSize)}
+                className={`flex-1 py-1 text-center rounded border cursor-pointer ${
+                  orientation === 'landscape' ? 'bg-blue-700 text-white font-bold' : 'bg-stone-50 text-stone-600'
+                }`}
+                title="Landscape: wider than tall (adds a column)"
+              >
+                ▭ Wide
+              </button>
+            </div>
+
+            <div className="flex items-center gap-1.5 pt-1 text-[11px]">
+              <span className="text-stone-500 w-9">Paper:</span>
+              <select
+                value={paperSize}
+                onChange={(e) => changePage(orientation, e.target.value as PaperSize)}
+                className="flex-1 py-1 px-1 rounded border bg-stone-50 text-stone-700 cursor-pointer"
+              >
+                {(Object.keys(PAPER_SIZES) as PaperSize[]).map((key) => (
+                  <option key={key} value={key}>
+                    {PAPER_SIZES[key].label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex items-center gap-1.5 pt-1 text-[11px]">
+              <span className="text-stone-500 w-9">Ink:</span>
+              <button
+                onClick={() => setInkMode('color')}
+                className={`flex-1 py-1 text-center rounded border cursor-pointer ${
+                  inkMode === 'color' ? 'bg-blue-700 text-white font-bold' : 'bg-stone-50 text-stone-600'
+                }`}
+                title="Prints headings in your church brand color"
+              >
+                🎨 Color
+              </button>
+              <button
+                onClick={() => setInkMode('black')}
+                className={`flex-1 py-1 text-center rounded border cursor-pointer ${
+                  inkMode === 'black' ? 'bg-stone-900 text-white font-bold' : 'bg-stone-50 text-stone-600'
+                }`}
+                title="Black ink only: no color or shaded backgrounds"
+              >
+                ⚫ Black ink
+              </button>
+            </div>
           </div>
 
           {/* Column 2: Font Size & Spacing */}
@@ -1106,22 +1145,34 @@ export const PrintableBulletinBuilder: React.FC = () => {
         </div>
       </div>
 
+      {/* Page orientation for Print / Save as PDF (overrides the default @page size) */}
+      <style>{`@media print { @page { size: ${pageWidthIn}in ${pageHeightIn}in; margin: ${paper.margin}in; } }`}</style>
+
       {/* Live Printable Sheet Preview Container (Rendered exactly for print and screen) */}
-      <div className="bg-stone-300/40 p-2 sm:p-6 rounded-2xl flex justify-center no-print-bg">
+      <div className="bg-stone-300/40 p-2 sm:p-6 rounded-2xl flex justify-center no-print-bg print:p-0 print:bg-transparent print:block">
         <div
-          className={`printable-area bg-white text-stone-900 shadow-xl max-w-5xl w-full p-6 sm:p-10 transition-all border border-stone-200 ${
+          className={`printable-area ${inkMode === 'black' ? 'ink-black' : 'ink-color'} bg-white text-stone-900 shadow-xl w-full transition-all border border-stone-200 ${
             fontSizeClasses[fontSize]
           }`}
-          style={{ minHeight: '11in' }}
+          style={
+            {
+              // On screen the sheet is the real paper size, with the print margin as padding
+              maxWidth: `${pageWidthIn}in`,
+              minHeight: `${pageHeightIn}in`,
+              padding: `${paper.margin}in`,
+              '--brand': brandColor,
+            } as React.CSSProperties
+          }
         >
           {/* Sheet Header: Compact, Ink-friendly Header */}
-          <div className="border-b-2 border-stone-900 pb-2.5 mb-3.5">
+          <div className="brand-rule border-b-2 border-stone-900 pb-2.5 mb-3.5">
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-center gap-3">
                 {currentChurch.logoUrl && (
                   <img
                     src={currentChurch.logoUrl}
                     alt={currentChurch.name}
+                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
                     className="w-10 h-10 rounded object-cover shrink-0 border border-stone-300 print:filter print:grayscale"
                   />
                 )}
@@ -1175,7 +1226,7 @@ export const PrintableBulletinBuilder: React.FC = () => {
 
                 return (
                   <div key={cat} className="break-inside-avoid page-break-inside-avoid">
-                    <span className="font-bold uppercase tracking-wider text-stone-900 font-serif-church text-[10px] mr-1.5 bg-stone-100 px-1.5 py-0.5 rounded">
+                    <span className="category-ribbon font-bold uppercase tracking-wider text-stone-900 font-serif-church text-[10px] mr-1.5 bg-stone-100 px-1.5 py-0.5 rounded">
                       {cat} ({items.length}):
                     </span>
                     <span className="text-stone-700">
@@ -1218,7 +1269,7 @@ export const PrintableBulletinBuilder: React.FC = () => {
             <div className="space-y-4">
               <table className="w-full text-left border-collapse border border-stone-300 font-sans">
                 <thead>
-                  <tr className="bg-stone-100 text-stone-800 font-bold border-b border-stone-400 text-[10px] uppercase tracking-wider">
+                  <tr className="category-ribbon bg-stone-100 text-stone-800 font-bold border-b border-stone-400 text-[10px] uppercase tracking-wider">
                     {showCheckboxes && <th className="p-1 px-1.5 w-6 text-center">☐</th>}
                     <th className="p-1 px-2 w-1/4">Name / Family</th>
                     <th className="p-1 px-2">Need / Intercession Point</th>
@@ -1334,7 +1385,7 @@ export const PrintableBulletinBuilder: React.FC = () => {
                     className={`${avoidCategoryBreak ? 'break-inside-avoid page-break-inside-avoid' : 'break-inside-auto'} mb-3 border-b border-stone-200 pb-2`}
                   >
                     {/* Category Ribbon Header */}
-                    <div className="break-after-avoid page-break-after-avoid flex items-center justify-between border-b border-stone-900 pb-0.5 mb-1.5 bg-stone-100/80 px-1.5 py-0.5">
+                    <div className="category-ribbon break-after-avoid page-break-after-avoid flex items-center justify-between border-b border-stone-900 pb-0.5 mb-1.5 bg-stone-100/80 px-1.5 py-0.5">
                       <span className="font-serif-church font-bold uppercase tracking-wider text-[10px] text-stone-900">
                         {cat}
                       </span>

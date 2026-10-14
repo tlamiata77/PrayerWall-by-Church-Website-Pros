@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
+import { resizeImageFile } from '../utils/imageResize';
 import { Church, ChurchThemeColor } from '../types';
 import { PRESET_THEMES, getChurchTheme } from '../utils/theme';
 import {
@@ -30,13 +31,21 @@ export const ChurchBrandingModal: React.FC<ChurchBrandingModalProps> = ({
 }) => {
   const { currentChurch, updateChurchProfile } = useApp();
 
-  const [formData, setFormData] = useState<Church>(() => ({
-    ...currentChurch,
-    themeColor: currentChurch.themeColor || 'teal_pink',
-    primaryColor: currentChurch.primaryColor || '#4eb8b9',
-    accentColor: currentChurch.accentColor || '#c219b0',
-    zipCode: currentChurch.zipCode || '75219',
-  }));
+  const formFromChurch = (church: Church): Church => ({
+    ...church,
+    themeColor: church.themeColor || 'teal_pink',
+    primaryColor: church.primaryColor || '#4eb8b9',
+    accentColor: church.accentColor || '#c219b0',
+  });
+
+  const [formData, setFormData] = useState<Church>(() => formFromChurch(currentChurch));
+
+  // Load the church's latest saved details each time the window opens, so an
+  // out-of-date copy never gets saved back over newer changes
+  useEffect(() => {
+    if (isOpen) setFormData(formFromChurch(currentChurch));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, currentChurch.id]);
 
   const [activeTab, setActiveTab] = useState<'branding' | 'contact_address' | 'messaging'>('branding');
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -48,11 +57,9 @@ export const ChurchBrandingModal: React.FC<ChurchBrandingModalProps> = ({
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormData((prev) => ({ ...prev, logoUrl: reader.result as string }));
-      };
-      reader.readAsDataURL(file);
+      resizeImageFile(file)
+        .then((url) => setFormData((prev) => ({ ...prev, logoUrl: url })))
+        .catch((err) => console.warn('Image upload failed:', err));
     }
   };
 

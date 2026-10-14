@@ -15,9 +15,10 @@
 }
 
 @media print {
+  /* Size and margin are set by the bulletin builder for the chosen paper */
   @page {
     size: letter portrait;
-    margin: 0.35in;
+    margin: 0.5in;
   }
 
   /* Hide all non-printable elements */
@@ -46,8 +47,10 @@
   .printable-area {
     display: block !important;
     width: 100% !important;
+    max-width: none !important;
+    min-height: 0 !important; /* on-screen 11in preview height would spill a blank page */
     margin: 0 !important;
-    padding: 0.25in 0.35in !important;
+    padding: 0 !important; /* @page margin is the only margin, so the sheet uses the full width */
     box-shadow: none !important;
     border: none !important;
     background: transparent !important;
@@ -67,6 +70,46 @@
     text-decoration: none !important;
     color: #1a1a1a !important;
   }
+}
+
+/* Bulletin ink modes (applied on screen too, so the preview matches the printout) */
+.printable-area.ink-color {
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.printable-area.ink-color h1 {
+  color: var(--brand) !important;
+}
+.printable-area.ink-color .brand-rule {
+  border-color: var(--brand) !important;
+}
+.printable-area.ink-color .category-ribbon {
+  background-color: color-mix(in srgb, var(--brand) 14%, white) !important;
+  border-color: var(--brand) !important;
+}
+.printable-area.ink-color .category-ribbon,
+.printable-area.ink-color .category-ribbon * {
+  color: color-mix(in srgb, var(--brand) 70%, black) !important;
+}
+
+.printable-area.ink-black,
+.printable-area.ink-black * {
+  color: #000 !important;
+  border-color: #555 !important;
+  box-shadow: none !important;
+}
+.printable-area.ink-black * {
+  background-color: transparent !important;
+}
+.printable-area.ink-black {
+  background-color: #fff !important;
+}
+.printable-area.ink-black .category-ribbon,
+.printable-area.ink-black .brand-rule {
+  border-color: #000 !important;
+}
+.printable-area.ink-black img {
+  filter: grayscale(1) contrast(1.15);
 }
 
 /* Container query setup for prayer wall and responsive embeds */

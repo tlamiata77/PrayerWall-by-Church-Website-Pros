@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
+import { resizeImageFile } from '../utils/imageResize';
 import { PrayerRequest, Church, ChurchThemeColor } from '../types';
 import { PRESET_THEMES, getChurchTheme } from '../utils/theme';
 import {
@@ -73,16 +74,20 @@ export const StaffModerationPortal: React.FC = () => {
 
   // Editing church settings
   const [settingsForm, setSettingsForm] = useState<Church>(currentChurch);
+
+  // Show the selected church's saved settings (switching churches must not carry the old form over)
+  useEffect(() => {
+    setSettingsForm(currentChurch);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentChurch.id]);
   const [settingsSaved, setSettingsSaved] = useState(false);
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setSettingsForm((prev) => ({ ...prev, logoUrl: reader.result as string }));
-      };
-      reader.readAsDataURL(file);
+      resizeImageFile(file)
+        .then((url) => setSettingsForm((prev) => ({ ...prev, logoUrl: url })))
+        .catch((err) => console.warn('Image upload failed:', err));
     }
   };
 

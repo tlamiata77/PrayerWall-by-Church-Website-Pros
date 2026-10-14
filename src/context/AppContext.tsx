@@ -124,19 +124,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (!seen.has(dedupeKey)) {
           seen.add(dedupeKey);
           if (isCalvary) {
+            // Keep the church's saved branding and contact details; defaults only fill gaps
             deduped.push({
+              ...calvaryDefault,
               ...c,
               id: 'church-calvary-baptist',
-              slug: 'calvary-baptist-alcoa',
-              name: 'Calvary Baptist Church',
-              pastorName: 'Pastor Greg Williamson',
-              contactEmail: 'pastor@calvarybaptistalcoa.org',
-              phone: '(865) 555-0144',
-              address: '100 W Springbrook Rd',
-              websiteUrl: c.websiteUrl || 'https://calvarybaptistalcoa.org',
-              city: 'Alcoa',
-              state: 'TN',
-              zipCode: '37701',
             });
           } else {
             deduped.push(c);
