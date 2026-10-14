@@ -189,35 +189,24 @@ export const AppNavigation: React.FC = () => {
                   {currentChurch.name}
                 </h1>
 
-                {/* Church Switcher Dropdown */}
+                {/* Church Switcher Dropdown (registering is the separate button next to it) */}
+                {churches.length > 0 && (
                 <div className="relative inline-block">
                   <select
                     value={currentChurchId}
-                    onChange={(e) => {
-                      if (e.target.value === 'REGISTER_NEW_CHURCH') {
-                        openLoginModal(undefined, 'register_church');
-                      } else {
-                        setCurrentChurchId(e.target.value);
-                      }
-                    }}
+                    onChange={(e) => setCurrentChurchId(e.target.value)}
                     className="appearance-none bg-stone-100 hover:bg-stone-200/80 text-stone-700 text-xs font-semibold rounded-md pl-2 pr-6 py-1 border border-stone-300/80 cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#4eb8b9]"
-                    title="Switch Church or Register a New Church"
+                    title="Switch church"
                   >
-                    <optgroup label="Churches on Network">
-                      {churches.map((church) => (
-                        <option key={church.id} value={church.id}>
-                          {church.name}{church.city ? ` (${church.city}, ${church.state})` : ''}
-                        </option>
-                      ))}
-                    </optgroup>
-                    <optgroup label="Church Onboarding">
-                      <option value="REGISTER_NEW_CHURCH">
-                        ➕ + Register a New Church...
+                    {churches.map((church) => (
+                      <option key={church.id} value={church.id}>
+                        {church.name}{church.city ? ` (${church.city}, ${church.state})` : ''}
                       </option>
-                    </optgroup>
+                    ))}
                   </select>
                   <ChevronDown className="w-3.5 h-3.5 text-stone-500 absolute right-1.5 top-2 pointer-events-none" />
                 </div>
+                )}
 
                 {/* Quick Register New Church Button */}
                 <button
@@ -243,7 +232,13 @@ export const AppNavigation: React.FC = () => {
               </div>
 
               <p className="text-xs text-stone-500 hidden sm:block">
-                {currentChurch.tagline} • {currentChurch.pastorName} • {currentChurch.city}, {currentChurch.state}
+                {[
+                  currentChurch.tagline,
+                  currentChurch.pastorName,
+                  [currentChurch.city, currentChurch.state].filter(Boolean).join(', '),
+                ]
+                  .filter(Boolean)
+                  .join(' • ')}
               </p>
             </div>
           </div>
