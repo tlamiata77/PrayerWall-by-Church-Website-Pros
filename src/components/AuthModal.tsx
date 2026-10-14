@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
+import { resizeImageFile } from '../utils/imageResize';
 import {
   X,
   Lock,
@@ -239,11 +240,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setAvatarUrl(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+      resizeImageFile(file)
+        .then((url) => setAvatarUrl(url))
+        .catch((err) => console.warn('Image upload failed:', err));
     }
   };
 

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { resizeImageFile } from '../utils/imageResize';
 import {
   Users,
   Search,
@@ -129,11 +130,9 @@ export const ChurchDirectory: React.FC = () => {
   const handlePhotoFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormPhotoUrl(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+      resizeImageFile(file)
+        .then((url) => setFormPhotoUrl(url))
+        .catch((err) => console.warn('Image upload failed:', err));
     }
   };
 
