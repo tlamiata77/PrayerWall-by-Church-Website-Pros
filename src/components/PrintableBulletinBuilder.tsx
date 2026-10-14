@@ -58,6 +58,7 @@ export const PrintableBulletinBuilder: React.FC = () => {
     categorizePrayersWithAI,
     isAICategorizing,
     repairDateTitles,
+    isSuperAdmin,
   } = useApp();
 
   // Template / Layout selection
@@ -494,7 +495,8 @@ export const PrintableBulletinBuilder: React.FC = () => {
               <span>Import CSV</span>
             </button>
 
-            {/* Load 75 Sample Requests Button */}
+            {/* Load 75 Sample Requests Button (super admin testing tool) */}
+            {isSuperAdmin && (
             <button
               onClick={load75WeeklyRequests}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-stone-800 hover:bg-stone-700 text-stone-200 rounded-lg text-xs font-semibold border border-stone-700 transition-colors cursor-pointer"
@@ -503,6 +505,7 @@ export const PrintableBulletinBuilder: React.FC = () => {
               <RefreshCw className="w-3.5 h-3.5 text-stone-400" />
               <span>Load 75 Requests Demo</span>
             </button>
+            )}
 
             {/* AI Bulk Compress to 1-Liners */}
             <button

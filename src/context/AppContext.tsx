@@ -1,10 +1,51 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import type { Session } from '@supabase/supabase-js';
 import { Church, PrayerRequest, UserRole, VisibilityType, RequestCategory, ModerationStatus, AppTab, UserAccount, DirectoryMember } from '../types';
-import { INITIAL_CHURCHES, INITIAL_REQUESTS } from '../data/initialData';
 import { SAMPLE_75_WEEKLY_REQUESTS } from '../data/sample75Requests';
-import { INITIAL_USERS } from '../data/initialUsers';
-import { INITIAL_DIRECTORY_MEMBERS } from '../data/initialDirectory';
 import { isDateString, parseDateToISO, healPrayerRequest } from '../utils/csvParser';
+import {
+  supabase,
+  churchFromRow,
+  churchToRow,
+  requestFromRow,
+  requestToRows,
+  profileFromRow,
+  directoryFromRow,
+  directoryToRow,
+  newId,
+} from '../lib/supabase';
+
+export type MemberAccount = UserAccount & { approved: boolean };
+
+export interface AdminNotification {
+  id: number;
+  kind: string;
+  churchId: string | null;
+  message: string;
+  readAt: string | null;
+  createdAt: string;
+}
+
+export type AuthResult = { success: boolean; error?: string; needsEmailConfirmation?: boolean };
+
+export interface RegisterChurchInput {
+  church: {
+    name: string;
+    pastorName: string;
+    denomination?: string;
+    tagline?: string;
+    phone?: string;
+    address?: string;
+    city?: string;
+    state?: string;
+    zipCode?: string;
+    websiteUrl?: string;
+    contactEmail?: string;
+  };
+  // Needed only when nobody is signed in yet
+  email?: string;
+  password?: string;
+}
 
 interface AppContextType {
   churches: Church[];
@@ -26,18 +67,34 @@ interface AppContextType {
   setActiveTab: (tab: AppTab) => void;
   submitModalOpen: boolean;
   setSubmitModalOpen: (open: boolean) => void;
-  users: UserAccount[];
-  currentUser: UserAccount | null;
+  /** Profiles this account may see: its own, its church's members (staff), everyone (super admin) */
+  users: MemberAccount[];
+  currentUser: MemberAccount | null;
+  isSuperAdmin: boolean;
   directory: DirectoryMember[];
   loginModalOpen: boolean;
   setLoginModalOpen: (open: boolean) => void;
   loginModalInitialMode: 'login' | 'register' | 'register_church';
   openLoginModal: (redirectTab?: AppTab, mode?: 'login' | 'register' | 'register_church') => void;
   closeLoginModal: () => void;
-  login: (email: string, password?: string) => { success: boolean; error?: string };
-  logout: () => void;
-  register: (data: Omit<UserAccount, 'id' | 'createdAt'> & { password?: string }) => { success: boolean; error?: string };
-  switchAccount: (userId: string) => void;
+  login: (email: string, password: string) => Promise<AuthResult>;
+  logout: () => Promise<void>;
+  register: (data: {
+    email: string;
+    password: string;
+    name: string;
+    phone?: string;
+    churchId: string;
+    title?: string;
+    avatarUrl?: string;
+  }) => Promise<AuthResult>;
+  registerChurch: (input: RegisterChurchInput) => Promise<AuthResult & { churchId?: string }>;
+  sendPasswordReset: (email: string) => Promise<AuthResult>;
+  approveMember: (userId: string) => Promise<void>;
+  setMemberRole: (userId: string, role: 'church_staff' | 'congregation_member') => Promise<void>;
+  revokeMember: (userId: string) => Promise<void>;
+  notifications: AdminNotification[];
+  markNotificationsRead: () => Promise<void>;
   resubmitPrayerRequest: (requestId: string, updatedContent?: string, isUrgent?: boolean) => void;
   addDirectoryMember: (member: Omit<DirectoryMember, 'id' | 'createdAt'>) => string;
   updateDirectoryMember: (id: string, updates: Partial<DirectoryMember>) => void;
@@ -60,6 +117,7 @@ interface AppContextType {
     note?: string
   ) => void;
   updateBulletinSummary: (requestId: string, summary: string) => void;
+  updateStaffNotes: (requestId: string, notes: string) => void;
   bulkUpdateBulletinSummaries: (updates: Array<{ id: string; ultraSummary: string }>) => void;
   togglePrayerAnswered: (requestId: string, updateNote?: string) => void;
   updateChurchProfile: (churchId: string, updates: Partial<Church>) => void;
@@ -95,388 +153,443 @@ interface AppContextType {
   repairDateTitles: () => number;
   categorizePrayersWithAI: (targetRequests?: PrayerRequest[]) => Promise<{ success: boolean; count: number }>;
   isAICategorizing: boolean;
+  /** True until the first load from the database finishes */
+  isLoading: boolean;
+  /** Last save/load problem, shown in a banner */
+  dataError: string | null;
+  clearDataError: () => void;
+  refreshData: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
+// Shown before any church has loaded (or when the database has no churches yet)
+const PLACEHOLDER_CHURCH: Church = {
+  id: '',
+  slug: '',
+  name: 'GraceWall',
+  tagline: 'Church prayer walls by Church Website Pros',
+  denomination: '',
+  pastorName: '',
+  contactEmail: '',
+  phone: '',
+  address: '',
+  city: '',
+  state: '',
+  websiteUrl: '',
+  themeColor: 'teal_pink',
+  primaryColor: '#4eb8b9',
+  accentColor: '#c219b0',
+  welcomeMessage: 'Welcome to the prayer wall.',
+  scriptureVerse: 'Pray without ceasing. — 1 Thessalonians 5:17',
+  settings: {
+    allowAnonymous: true,
+    requireStaffReviewBeforePublish: false,
+    autoApproveHighScores: true,
+    enablePraiseUpdates: true,
+    defaultPrintColumns: 2,
+    defaultWallLayout: 'grid',
+  },
+};
+
+// Per-viewer conveniences only; all real data lives in Supabase
+const LAST_CHURCH_KEY = 'gracewall_last_church';
+const PRAYED_KEY = 'gracewall_prayed_ids';
+
+const readLocal = (key: string): string | null => {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+};
+const writeLocal = (key: string, value: string) => {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* storage unavailable (private window, blocked) */
+  }
+};
+
+const readPrayedIds = (): Set<string> => {
+  try {
+    return new Set(JSON.parse(readLocal(PRAYED_KEY) || '[]'));
+  } catch {
+    return new Set();
+  }
+};
+
+/** Church slug from /embed/<slug> or ?church=<slug> */
+const churchSlugFromUrl = (): string | null => {
+  const embed = window.location.pathname.match(/^\/embed\/([^/?#]+)/);
+  if (embed) return decodeURIComponent(embed[1]);
+  return new URLSearchParams(window.location.search).get('church');
+};
+
+/** Supabase returns at most 1000 rows per request, so page through larger tables. */
+async function fetchAllRows(table: string, orderBy = 'created_at'): Promise<Record<string, unknown>[]> {
+  const pageSize = 1000;
+  const rows: Record<string, unknown>[] = [];
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabase
+      .from(table)
+      .select('*')
+      .order(orderBy, { ascending: false })
+      .range(from, from + pageSize - 1);
+    if (error) throw error;
+    rows.push(...(data || []));
+    if (!data || data.length < pageSize) return rows;
+  }
+}
+
+const friendlyAuthError = (message: string): string => {
+  const m = message.toLowerCase();
+  if (m.includes('invalid login')) return 'That email and password do not match an account.';
+  if (m.includes('email not confirmed')) return 'Please confirm your email first: open the link we emailed you, then sign in.';
+  if (m.includes('already registered')) return 'An account with this email already exists. Sign in instead.';
+  if (m.includes('password should be')) return 'Please choose a password of at least 6 characters.';
+  if (m.includes('rate limit')) return 'Too many attempts. Please wait a minute and try again.';
+  return message;
+};
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Load initial data or localStorage
-  const [churches, setChurches] = useState<Church[]>(() => {
-    const calvaryDefault = INITIAL_CHURCHES.find((c) => c.id === 'church-calvary-baptist')!;
-    try {
-      const saved = localStorage.getItem('gracewall_churches');
-      let list: Church[] = INITIAL_CHURCHES;
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          list = parsed;
-        }
-      }
+  const [session, setSession] = useState<Session | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [dataError, setDataError] = useState<string | null>(null);
 
-      // Deduplicate churches by name or id so duplicates are removed
-      const seen = new Set<string>();
-      const deduped: Church[] = [];
-      for (const c of list) {
-        const key = c.name.toLowerCase().trim();
-        const isCalvary = c.id === 'church-calvary-baptist' || key.includes('calvary');
-        const dedupeKey = isCalvary ? 'calvary baptist church' : key;
-        
-        if (!seen.has(dedupeKey)) {
-          seen.add(dedupeKey);
-          if (isCalvary) {
-            // Keep the church's saved branding and contact details; defaults only fill gaps
-            deduped.push({
-              ...calvaryDefault,
-              ...c,
-              id: 'church-calvary-baptist',
-            });
-          } else {
-            deduped.push(c);
-          }
-        }
-      }
+  const [churches, setChurches] = useState<Church[]>([]);
+  const [requests, setRequests] = useState<PrayerRequest[]>([]);
+  const [users, setUsers] = useState<MemberAccount[]>([]);
+  const [directory, setDirectory] = useState<DirectoryMember[]>([]);
+  const [notifications, setNotifications] = useState<AdminNotification[]>([]);
 
-      // Ensure Calvary Baptist Church is ALWAYS in the church list
-      const hasCalvary = deduped.some((c) => c.id === 'church-calvary-baptist' || c.name.toLowerCase().includes('calvary'));
-      if (!hasCalvary && calvaryDefault) {
-        deduped.push(calvaryDefault);
-      }
-
-      return deduped;
-    } catch {
-      return INITIAL_CHURCHES;
-    }
-  });
-
-  const [currentChurchId, setCurrentChurchId] = useState<string>(() => {
-    return churches[0]?.id || 'church-grace';
-  });
-
-  const [activeRole, setActiveRole] = useState<UserRole>('church_staff');
+  const [currentChurchId, setCurrentChurchIdState] = useState<string>(() => readLocal(LAST_CHURCH_KEY) || '');
+  const [roleOverride, setRoleOverride] = useState<UserRole | null>(null);
   const [isImpersonating, setIsImpersonating] = useState<boolean>(false);
   const [impersonatedChurchId, setImpersonatedChurchId] = useState<string | null>(null);
-
-  const [requests, setRequests] = useState<PrayerRequest[]>(() => {
-    try {
-      const initialCalvary = INITIAL_REQUESTS.filter((r) => r.churchId === 'church-calvary-baptist');
-      const saved = localStorage.getItem('gracewall_requests');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length >= 10) {
-          const healed = parsed.map((r: PrayerRequest) => healPrayerRequest(r));
-          // Check if Calvary Baptist requests are missing or need updating
-          const calvaryInHealed = healed.filter((r) => r.churchId === 'church-calvary-baptist');
-          const calvaryNeedsRefresh =
-            calvaryInHealed.length < 20 ||
-            calvaryInHealed.some(
-              (r) =>
-                r.title === r.requesterName ||
-                r.title === 'Wanda D.' ||
-                r.title === 'Karen' ||
-                r.title === 'Sue S.' ||
-                r.title === 'Joy' ||
-                (r.category === 'General' && r.content && r.content.length > 4)
-            );
-
-          if (calvaryNeedsRefresh && initialCalvary.length >= 40) {
-            // Replace with the canonical 43 Calvary requests that are properly formatted like Grace Fellowship
-            const withoutCalvary = healed.filter((r) => r.churchId !== 'church-calvary-baptist');
-            return [...withoutCalvary, ...initialCalvary];
-          }
-          return healed;
-        }
-      }
-      // Combine initial requests and the 75 weekly requests for a full high-volume church experience
-      return [...INITIAL_REQUESTS, ...SAMPLE_75_WEEKLY_REQUESTS].map((r: PrayerRequest) => healPrayerRequest(r));
-    } catch {
-      return [...INITIAL_REQUESTS, ...SAMPLE_75_WEEKLY_REQUESTS].map((r: PrayerRequest) => healPrayerRequest(r));
-    }
-  });
 
   const [activeTab, setActiveTab] = useState<AppTab>('wall');
   const [submitModalOpen, setSubmitModalOpen] = useState(false);
   const [isModerating, setIsModerating] = useState(false);
   const [loginModalOpen, setLoginModalOpen] = useState(false);
   const [loginModalInitialMode, setLoginModalInitialMode] = useState<'login' | 'register' | 'register_church'>('login');
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [isAICategorizing, setIsAICategorizing] = useState(false);
 
-  // User Accounts & Authentication State
-  const [users, setUsers] = useState<UserAccount[]>(() => {
-    const calvaryPastorDefault: UserAccount = {
-      id: 'user-pastor-calvary',
-      email: 'pastor@calvarybaptistalcoa.org',
-      password: 'calvary2026',
-      name: 'Pastor Greg Williamson',
-      role: 'church_staff',
-      churchId: 'church-calvary-baptist',
-      title: 'Senior Pastor',
-      phone: '(865) 555-0144',
-      avatarUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=240&h=240&q=80',
-      createdAt: '2025-05-01T08:00:00Z',
-    };
+  const userId = session?.user.id || null;
+  const currentUser = users.find((u) => u.id === userId) || null;
+  const isSuperAdmin = currentUser?.role === 'super_admin';
 
+  const reportError = useCallback((action: string, error: unknown) => {
+    const message = error instanceof Error ? error.message : (error as { message?: string })?.message || String(error);
+    console.error(`${action} failed:`, error);
+    setDataError(`${action} didn't save: ${message}`);
+  }, []);
+
+  const setCurrentChurchId = useCallback((id: string) => {
+    setCurrentChurchIdState(id);
+    writeLocal(LAST_CHURCH_KEY, id);
+  }, []);
+
+  // ---------------------------------------------------------------------------
+  // Loading
+  // ---------------------------------------------------------------------------
+
+  const loadAll = useCallback(async (activeSession: Session | null) => {
     try {
-      const saved = localStorage.getItem('gracewall_users');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const updated = parsed.map((u: UserAccount) => {
-            const isCalvary =
-              u.id === 'user-pastor-calvary' ||
-              u.churchId === 'church-calvary-baptist' ||
-              (u.name && u.name.toLowerCase().includes('williamson')) ||
-              (u.name && u.name.includes('Vance') && u.email && u.email.includes('calvary')) ||
-              (u.email && u.email.toLowerCase().includes('calvary'));
+      const signedIn = Boolean(activeSession);
+      const [churchRows, requestRows, privateRows, directoryRows, profileRows] = await Promise.all([
+        fetchAllRows('churches', 'name'),
+        fetchAllRows('prayer_requests'),
+        signedIn ? fetchAllRows('prayer_request_private', 'request_id') : Promise.resolve([]),
+        signedIn ? fetchAllRows('directory_members') : Promise.resolve([]),
+        signedIn ? fetchAllRows('profiles') : Promise.resolve([]),
+      ]);
 
-            if (isCalvary && (u.role === 'church_staff' || !u.role)) {
-              return {
-                ...u,
-                id: 'user-pastor-calvary',
-                name: 'Pastor Greg Williamson',
-                email: 'pastor@calvarybaptistalcoa.org',
-                password: u.password || 'calvary2026',
-                role: 'church_staff' as const,
-                churchId: 'church-calvary-baptist',
-                title: 'Senior Pastor',
-                phone: u.phone || '(865) 555-0144',
-                avatarUrl: u.avatarUrl || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=240&h=240&q=80',
-              };
-            }
-            return u;
-          });
+      const loadedChurches = churchRows.map(churchFromRow).sort((a, b) => a.name.localeCompare(b.name));
+      const churchesById = new Map(loadedChurches.map((c) => [c.id, c]));
+      const privateById = new Map(privateRows.map((p) => [p.request_id as string, p]));
+      const prayed = readPrayedIds();
 
-          const hasCalvaryPastor = updated.some(
-            (u: UserAccount) => u.id === 'user-pastor-calvary' || u.name.includes('Williamson')
-          );
-          if (!hasCalvaryPastor) {
-            return [calvaryPastorDefault, ...updated];
-          }
-          return updated;
-        }
-      }
-      return INITIAL_USERS;
-    } catch {
-      return INITIAL_USERS;
-    }
-  });
+      setChurches(loadedChurches);
+      setRequests(
+        requestRows.map((r) => ({
+          ...requestFromRow(r, privateById.get(r.id as string), churchesById),
+          prayedByMe: prayed.has(r.id as string),
+        }))
+      );
+      setDirectory(directoryRows.map(directoryFromRow));
+      const loadedUsers = profileRows.map(profileFromRow);
+      setUsers(loadedUsers);
 
-  const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
-    try {
-      const saved = localStorage.getItem('gracewall_current_user');
-      if (saved) {
-        const u = JSON.parse(saved);
-        if (
-          u &&
-          (u.id === 'user-pastor-calvary' ||
-            (u.churchId === 'church-calvary-baptist' && u.role === 'church_staff') ||
-            (u.name && u.name.includes('Vance') && u.email && u.email.includes('calvary')))
-        ) {
-          return {
-            ...u,
-            name: 'Pastor Greg Williamson',
-          };
-        }
-        return u;
-      }
-      return INITIAL_USERS[0]; // Default to Pastor David Matthews for immediate full capability
-    } catch {
-      return INITIAL_USERS[0];
-    }
-  });
-
-  // Church Directory State
-  const [directory, setDirectory] = useState<DirectoryMember[]>(() => {
-    try {
-      const saved = localStorage.getItem('gracewall_directory');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const updated = parsed.map((m: DirectoryMember) => {
-            if (m.churchId === 'church-calvary-baptist' && (m.roleTitle === 'Senior Pastor' || m.name.includes('Vance'))) {
-              return {
-                ...m,
-                name: 'Pastor Greg Williamson',
-              };
-            }
-            return m;
-          });
-          const hasCalvaryPastor = updated.some((m: DirectoryMember) => m.name === 'Pastor Greg Williamson');
-          if (!hasCalvaryPastor) {
-            const calvaryPastor = INITIAL_DIRECTORY_MEMBERS.find((m) => m.name === 'Pastor Greg Williamson');
-            if (calvaryPastor) return [...updated, calvaryPastor];
-          }
-          return updated;
-        }
-      }
-      return INITIAL_DIRECTORY_MEMBERS;
-    } catch {
-      return INITIAL_DIRECTORY_MEMBERS;
-    }
-  });
-
-  // Sync to localStorage
-  useEffect(() => {
-    try {
-      localStorage.setItem('gracewall_churches', JSON.stringify(churches));
-    } catch (e) {
-      console.warn('Failed saving churches to localStorage', e);
-    }
-  }, [churches]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('gracewall_requests', JSON.stringify(requests));
-    } catch (e) {
-      console.warn('Failed saving requests to localStorage', e);
-    }
-  }, [requests]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('gracewall_users', JSON.stringify(users));
-    } catch (e) {
-      console.warn('Failed saving users to localStorage', e);
-    }
-  }, [users]);
-
-  useEffect(() => {
-    try {
-      if (currentUser) {
-        localStorage.setItem('gracewall_current_user', JSON.stringify(currentUser));
+      const me = loadedUsers.find((u) => u.id === activeSession?.user.id);
+      if (me?.role === 'super_admin') {
+        const { data, error } = await supabase
+          .from('admin_notifications')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(200);
+        if (error) throw error;
+        setNotifications(
+          (data || []).map((n) => ({
+            id: n.id,
+            kind: n.kind,
+            churchId: n.church_id,
+            message: n.message,
+            readAt: n.read_at,
+            createdAt: n.created_at,
+          }))
+        );
       } else {
-        localStorage.removeItem('gracewall_current_user');
+        setNotifications([]);
       }
+
+      // Pick which church to show: the link's church, then the last one viewed,
+      // then the member's own church, then the first church.
+      setCurrentChurchIdState((prev) => {
+        const fromUrl = churchSlugFromUrl();
+        const urlChurch = fromUrl ? loadedChurches.find((c) => c.slug === fromUrl || c.id === fromUrl) : undefined;
+        if (urlChurch) return urlChurch.id;
+        if (prev && churchesById.has(prev)) return prev;
+        if (me?.churchId && churchesById.has(me.churchId)) return me.churchId;
+        return loadedChurches[0]?.id || '';
+      });
     } catch (e) {
-      console.warn('Failed saving current user to localStorage', e);
+      reportError('Loading prayer data', e);
+    } finally {
+      setIsLoading(false);
     }
-  }, [currentUser]);
+  }, [reportError]);
+
+  const sessionRef = useRef<Session | null>(null);
+  sessionRef.current = session;
+  const refreshData = useCallback(() => loadAll(sessionRef.current), [loadAll]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem('gracewall_directory', JSON.stringify(directory));
-    } catch (e) {
-      console.warn('Failed saving directory to localStorage', e);
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      setAuthReady(true);
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((event, newSession) => {
+      // Token refreshes keep the same user; no need to reload everything
+      if (event === 'TOKEN_REFRESHED') return;
+      setSession(newSession);
+      setAuthReady(true);
+    });
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (authReady) loadAll(session);
+    // Reload when the signed-in user changes, not on every session object refresh
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authReady, userId, loadAll]);
+
+  // Pick up changes made by other staff when someone comes back to the tab
+  useEffect(() => {
+    const onFocus = () => {
+      if (document.visibilityState === 'visible') refreshData();
+    };
+    document.addEventListener('visibilitychange', onFocus);
+    return () => document.removeEventListener('visibilitychange', onFocus);
+  }, [refreshData]);
+
+  // ---------------------------------------------------------------------------
+  // Derived state
+  // ---------------------------------------------------------------------------
+
+  const currentChurch = churches.find((c) => c.id === currentChurchId) || churches[0] || PLACEHOLDER_CHURCH;
+  const impersonatedChurch = impersonatedChurchId
+    ? churches.find((c) => c.id === impersonatedChurchId) || null
+    : null;
+
+  // What this person may do on the church being viewed
+  const realRole: UserRole = !currentUser
+    ? 'congregation_member'
+    : currentUser.role === 'super_admin'
+    ? 'super_admin'
+    : currentUser.role === 'church_staff' && currentUser.churchId === currentChurch.id
+    ? 'church_staff'
+    : 'congregation_member';
+
+  const activeRole: UserRole = roleOverride ?? realRole;
+
+  // Only super admins can preview other roles; everyone may open the embed preview
+  const setActiveRole = (role: UserRole) => {
+    if (role === 'embed_view' || isSuperAdmin) {
+      setRoleOverride(role === realRole ? null : role);
+    } else {
+      setRoleOverride(null);
     }
-  }, [directory]);
+  };
 
-  // Auth Methods
-  const login = (email: string, password?: string) => {
-    const cleanEmail = email.trim().toLowerCase();
-    let found = users.find(
-      (u) => u.email.trim().toLowerCase() === cleanEmail
-    );
+  const filteredChurchRequests = requests.filter((r) => r.churchId === currentChurch.id);
+  const globalRequests = requests.filter((r) => r.visibility === 'global' && r.status === 'approved' && !r.isArchived);
+  const flaggedRequests = filteredChurchRequests.filter((r) => r.status === 'flagged' || r.status === 'pending');
+  const privateRequests = filteredChurchRequests.filter((r) => r.visibility === 'private');
+  const canManageCurrentChurch = isSuperAdmin || (currentUser?.role === 'church_staff' && currentUser.churchId === currentChurch.id);
 
-    // Flexible lookup if user entered a shortcut or forgot exact email
-    if (!found) {
-      if (cleanEmail.includes('calvary') || cleanEmail.includes('williamson') || cleanEmail.includes('alcoa')) {
-        found = users.find((u) => u.id === 'user-pastor-calvary' || u.name.includes('Williamson'));
-      } else if (cleanEmail.includes('grace') || cleanEmail.includes('matthews')) {
-        found = users.find((u) => u.id === 'user-pastor-grace');
-      } else if (cleanEmail.includes('redeemer') || cleanEmail.includes('jenkins')) {
-        found = users.find((u) => u.id === 'user-staff-redeemer');
-      } else if (cleanEmail.includes('admin') || cleanEmail.includes('superadmin')) {
-        found = users.find((u) => u.role === 'super_admin');
-      } else if (cleanEmail.includes('rebecca')) {
-        found = users.find((u) => u.id === 'user-member-rebecca');
+  // ---------------------------------------------------------------------------
+  // Saving helpers
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Applies changes locally right away, then saves them. Requests that receive the
+   * identical change are saved with one query.
+   */
+  const saveRequestChanges = (changes: Array<{ id: string; patch: Partial<PrayerRequest> }>, action: string) => {
+    if (changes.length === 0) return;
+    const byId = new Map(changes.map((c) => [c.id, c.patch]));
+    setRequests((prev) => prev.map((r) => (byId.has(r.id) ? { ...r, ...byId.get(r.id)! } : r)));
+
+    const churchOf = new Map(requests.map((r) => [r.id, r.churchId]));
+    const groups = new Map<string, { row: Record<string, unknown>; ids: string[] }>();
+    const privateUpserts: Record<string, unknown>[] = [];
+    for (const { id, patch } of changes) {
+      const { row, priv } = requestToRows(patch);
+      if (Object.keys(row).length > 0) {
+        const key = JSON.stringify(row);
+        const group = groups.get(key) || { row, ids: [] as string[] };
+        group.ids.push(id);
+        groups.set(key, group);
+      }
+      if (Object.keys(priv).length > 0) {
+        privateUpserts.push({ request_id: id, church_id: churchOf.get(id), ...priv });
       }
     }
 
-    if (!found) {
-      return { success: false, error: 'No account found with this email address.' };
-    }
-
-    // Password validation with friendly fallback for demo passwords
-    if (password && found.password && found.password !== password) {
-      const isKnownDemoPw =
-        password === 'calvary2026' ||
-        password === 'grace2026' ||
-        password === 'redeemer2026' ||
-        password === 'member123' ||
-        password === 'superadmin123';
-      if (!isKnownDemoPw) {
-        return { success: false, error: 'Incorrect password. Try demo password or check spelling.' };
+    const writes: PromiseLike<{ error: unknown }>[] = [];
+    for (const { row, ids } of groups.values()) {
+      for (let i = 0; i < ids.length; i += 200) {
+        writes.push(supabase.from('prayer_requests').update(row).in('id', ids.slice(i, i + 200)));
       }
     }
-
-    setCurrentUser(found);
-    setActiveRole(found.role);
-    if (found.churchId && found.role !== 'super_admin') {
-      setCurrentChurchId(found.churchId);
+    if (privateUpserts.length > 0) {
+      writes.push(supabase.from('prayer_request_private').upsert(privateUpserts));
     }
+    Promise.all(writes).then((results) => {
+      const failed = results.find((r) => r.error);
+      if (failed) {
+        reportError(action, failed.error);
+        refreshData();
+      }
+    });
+  };
+
+  const insertRequests = async (items: PrayerRequest[], action: string) => {
+    const rows = items.map((r) => requestToRows(r));
+    for (let i = 0; i < rows.length; i += 500) {
+      const chunk = rows.slice(i, i + 500);
+      const { error } = await supabase.from('prayer_requests').insert(chunk.map((c) => c.row));
+      if (error) throw error;
+      const privRows = chunk
+        .map((c, j): Record<string, unknown> => ({ request_id: items[i + j].id, church_id: items[i + j].churchId, ...c.priv }))
+        .filter((p) => p.requester_email || p.requester_phone || p.staff_notes);
+      if (privRows.length > 0) {
+        const { error: privError } = await supabase.from('prayer_request_private').insert(privRows);
+        if (privError) throw privError;
+      }
+    }
+  };
+
+  // ---------------------------------------------------------------------------
+  // Auth
+  // ---------------------------------------------------------------------------
+
+  const login = async (email: string, password: string): Promise<AuthResult> => {
+    const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    if (error) return { success: false, error: friendlyAuthError(error.message) };
+    setRoleOverride(null);
+    setIsImpersonating(false);
+    setImpersonatedChurchId(null);
+    // Land on the member's own church
+    const { data: profile } = await supabase.from('profiles').select('church_id').eq('id', data.user.id).single();
+    if (profile?.church_id) setCurrentChurchId(profile.church_id);
     return { success: true };
   };
 
-  const logout = () => {
-    setCurrentUser(null);
-    setActiveRole('congregation_member');
+  const logout = async () => {
+    await supabase.auth.signOut();
+    setRoleOverride(null);
+    setIsImpersonating(false);
+    setImpersonatedChurchId(null);
     setActiveTab('wall');
   };
 
-  const register = (data: Omit<UserAccount, 'id' | 'createdAt'> & { password?: string }) => {
-    const existing = users.find(
-      (u) => u.email.trim().toLowerCase() === data.email.trim().toLowerCase()
-    );
-    if (existing) {
-      // If user exists, seamlessly update their account with new details and church affiliation
-      const updatedUser: UserAccount = {
-        ...existing,
-        name: data.name || existing.name,
-        role: data.role || existing.role,
-        churchId: data.churchId || existing.churchId,
-        title: data.title || existing.title,
-        phone: data.phone || existing.phone,
-        password: data.password || existing.password,
-        avatarUrl: data.avatarUrl || existing.avatarUrl,
-      };
-      setUsers((prev) => prev.map((u) => (u.id === existing.id ? updatedUser : u)));
-      setCurrentUser(updatedUser);
-      setActiveRole(updatedUser.role);
-      if (updatedUser.churchId) {
-        setCurrentChurchId(updatedUser.churchId);
-      }
-      return { success: true };
+  const register: AppContextType['register'] = async (data) => {
+    const { data: result, error } = await supabase.auth.signUp({
+      email: data.email.trim(),
+      password: data.password,
+      options: {
+        emailRedirectTo: window.location.origin,
+        data: {
+          name: data.name.trim(),
+          phone: data.phone?.trim() || '',
+          title: data.title?.trim() || '',
+          church_id: data.churchId,
+        },
+      },
+    });
+    if (error) return { success: false, error: friendlyAuthError(error.message) };
+    // Supabase returns a user with no identities when the email is already registered
+    if (result.user && result.user.identities?.length === 0) {
+      return { success: false, error: 'An account with this email already exists. Sign in instead.' };
     }
+    if (data.churchId) setCurrentChurchId(data.churchId);
+    if (!result.session) return { success: true, needsEmailConfirmation: true };
 
-    const newUser: UserAccount = {
-      ...data,
-      id: `user-${Date.now()}`,
-      createdAt: new Date().toISOString(),
-    };
-
-    setUsers((prev) => [...prev, newUser]);
-    setCurrentUser(newUser);
-    setActiveRole(newUser.role);
-    if (newUser.churchId) {
-      setCurrentChurchId(newUser.churchId);
+    // Photos are saved after sign-up so they don't bloat the sign-in token
+    if (data.avatarUrl && result.user) {
+      await supabase.from('profiles').update({ avatar_url: data.avatarUrl }).eq('id', result.user.id);
     }
-
-    // Auto add to church directory
-    const newDirMember: DirectoryMember = {
-      id: `dir-${Date.now()}`,
-      churchId: newUser.churchId,
-      name: newUser.name,
-      roleTitle: newUser.title || (newUser.role === 'church_staff' ? 'Pastoral Staff' : 'Congregation Member'),
-      group: newUser.role === 'church_staff' ? 'Pastoral Staff' : 'Congregation Members',
-      email: newUser.email,
-      phone: newUser.phone || '(555) 000-0000',
-      photoUrl: newUser.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=240&h=240&q=80',
-      isPublicInDirectory: true,
-      joinedYear: new Date().getFullYear().toString(),
-      createdAt: new Date().toISOString(),
-    };
-    setDirectory((prev) => [newDirMember, ...prev]);
-
     return { success: true };
   };
 
-  const switchAccount = (userId: string) => {
-    const found = users.find((u) => u.id === userId);
-    if (found) {
-      setCurrentUser(found);
-      setActiveRole(found.role);
-      if (found.churchId && found.role !== 'super_admin') {
-        setCurrentChurchId(found.churchId);
-      }
+  const registerChurch: AppContextType['registerChurch'] = async ({ church, email, password }) => {
+    if (session) {
+      const { data, error } = await supabase.rpc('register_church', { p: church });
+      if (error) return { success: false, error: error.message };
+      const churchId = data as string;
+      await loadAll(session);
+      setCurrentChurchId(churchId);
+      return { success: true, churchId };
     }
+
+    if (!email || !password) return { success: false, error: 'Email and password are required' };
+    const { data: result, error } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+      options: {
+        emailRedirectTo: window.location.origin,
+        data: {
+          name: church.pastorName,
+          phone: church.phone || '',
+          title: 'Senior Pastor',
+          pending_church: { ...church, contactEmail: church.contactEmail || email.trim() },
+        },
+      },
+    });
+    if (error) return { success: false, error: friendlyAuthError(error.message) };
+    if (result.user && result.user.identities?.length === 0) {
+      return {
+        success: false,
+        error: 'An account with this email already exists. Sign in first, then register your church.',
+      };
+    }
+    if (!result.session) return { success: true, needsEmailConfirmation: true };
+
+    const { data: profile } = await supabase.from('profiles').select('church_id').eq('id', result.user!.id).single();
+    if (profile?.church_id) setCurrentChurchId(profile.church_id);
+    return { success: true, churchId: profile?.church_id || undefined };
+  };
+
+  const sendPasswordReset = async (email: string): Promise<AuthResult> => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: window.location.origin,
+    });
+    if (error) return { success: false, error: friendlyAuthError(error.message) };
+    return { success: true };
   };
 
   const openLoginModal = (_redirectTab?: AppTab, mode: 'login' | 'register' | 'register_church' = 'login') => {
@@ -488,122 +601,148 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setLoginModalOpen(false);
   };
 
-  // Directory Methods
+  // ---------------------------------------------------------------------------
+  // Members & notifications
+  // ---------------------------------------------------------------------------
+
+  const approveMember = async (memberId: string) => {
+    setUsers((prev) => prev.map((u) => (u.id === memberId ? { ...u, approved: true } : u)));
+    const { error } = await supabase.rpc('approve_member', { member_id: memberId });
+    if (error) reportError('Approving member', error);
+    await refreshData();
+  };
+
+  const setMemberRole = async (memberId: string, role: 'church_staff' | 'congregation_member') => {
+    setUsers((prev) => prev.map((u) => (u.id === memberId ? { ...u, role } : u)));
+    const { error } = await supabase.from('profiles').update({ role }).eq('id', memberId);
+    if (error) reportError('Changing member role', error);
+    await refreshData();
+  };
+
+  const revokeMember = async (memberId: string) => {
+    setUsers((prev) => prev.map((u) => (u.id === memberId ? { ...u, approved: false } : u)));
+    const { error } = await supabase
+      .from('profiles')
+      .update({ approved: false, role: 'congregation_member' })
+      .eq('id', memberId);
+    if (error) reportError('Removing member access', error);
+    await refreshData();
+  };
+
+  const markNotificationsRead = async () => {
+    const now = new Date().toISOString();
+    setNotifications((prev) => prev.map((n) => ({ ...n, readAt: n.readAt || now })));
+    const { error } = await supabase.from('admin_notifications').update({ read_at: now }).is('read_at', null);
+    if (error) reportError('Marking notifications read', error);
+  };
+
+  // ---------------------------------------------------------------------------
+  // Directory
+  // ---------------------------------------------------------------------------
+
   const addDirectoryMember = (memberData: Omit<DirectoryMember, 'id' | 'createdAt'>) => {
-    const newId = `dir-${Date.now()}`;
-    const newMember: DirectoryMember = {
-      ...memberData,
-      id: newId,
-      createdAt: new Date().toISOString(),
-    };
-    setDirectory((prev) => [newMember, ...prev]);
-    return newId;
+    const member: DirectoryMember = { ...memberData, id: newId('dir'), createdAt: new Date().toISOString() };
+    setDirectory((prev) => [member, ...prev]);
+    supabase
+      .from('directory_members')
+      .insert(directoryToRow(member))
+      .then(({ error }) => {
+        if (error) {
+          reportError('Adding directory member', error);
+          refreshData();
+        }
+      });
+    return member.id;
   };
 
   const updateDirectoryMember = (id: string, updates: Partial<DirectoryMember>) => {
-    setDirectory((prev) =>
-      prev.map((m) => (m.id === id ? { ...m, ...updates } : m))
-    );
+    setDirectory((prev) => prev.map((m) => (m.id === id ? { ...m, ...updates } : m)));
+    const { id: _ignored, ...rest } = updates;
+    supabase
+      .from('directory_members')
+      .update(directoryToRow(rest))
+      .eq('id', id)
+      .then(({ error }) => {
+        if (error) {
+          reportError('Updating directory member', error);
+          refreshData();
+        }
+      });
   };
 
   const deleteDirectoryMember = (id: string) => {
     setDirectory((prev) => prev.filter((m) => m.id !== id));
+    supabase
+      .from('directory_members')
+      .delete()
+      .eq('id', id)
+      .then(({ error }) => {
+        if (error) {
+          reportError('Removing directory member', error);
+          refreshData();
+        }
+      });
   };
 
-  // Resubmit Prayer Request to Wall
+  // ---------------------------------------------------------------------------
+  // Prayer requests
+  // ---------------------------------------------------------------------------
+
   const resubmitPrayerRequest = (requestId: string, updatedContent?: string, isUrgent?: boolean) => {
-    setRequests((prev) =>
-      prev.map((r) => {
-        if (r.id === requestId) {
-          const newContent = updatedContent?.trim()
-            ? `${r.content}\n\n[Renewed ${new Date().toLocaleDateString()}]: ${updatedContent.trim()}`
-            : r.content;
-          const resubmitTimes = (r.resubmittedTimes || 0) + 1;
-          return {
-            ...r,
+    const r = requests.find((x) => x.id === requestId);
+    if (!r) return;
+    const now = new Date().toISOString();
+    const newContent = updatedContent?.trim()
+      ? `${r.content}\n\n[Renewed ${new Date().toLocaleDateString()}]: ${updatedContent.trim()}`
+      : r.content;
+    saveRequestChanges(
+      [
+        {
+          id: requestId,
+          patch: {
             content: newContent,
             isUrgent: isUrgent !== undefined ? isUrgent : r.isUrgent,
-            createdAt: new Date().toISOString(),
-            lastResubmittedAt: new Date().toISOString(),
-            resubmittedTimes: resubmitTimes,
-            status: 'approved' as const,
+            createdAt: now,
+            lastResubmittedAt: now,
+            resubmittedTimes: (r.resubmittedTimes || 0) + 1,
             isArchived: false,
             isArchivedFromPrint: false,
             recentEncouragements: [
               {
                 text: 'Request resubmitted to church wall for continued prayer and intercession.',
-                date: new Date().toISOString().split('T')[0],
+                date: now.split('T')[0],
                 from: currentUser?.name || 'Member',
               },
               ...(r.recentEncouragements || []),
-            ],
-          };
-        }
-        return r;
-      })
+            ].slice(0, 5),
+          },
+        },
+      ],
+      'Resubmitting prayer request'
     );
   };
 
-  const currentChurch = churches.find((c) => c.id === currentChurchId) || churches[0];
-  const impersonatedChurch = impersonatedChurchId
-    ? churches.find((c) => c.id === impersonatedChurchId) || null
-    : null;
-
-  // Requests for currently active church
-  const filteredChurchRequests = requests.filter((r) => r.churchId === currentChurchId);
-  
-  // Global network requests (all approved global visibility requests across all churches)
-  const globalRequests = requests.filter((r) => r.visibility === 'global' && r.status === 'approved');
-
-  // Flagged requests needing moderation for current church
-  const flaggedRequests = filteredChurchRequests.filter((r) => r.status === 'flagged');
-
-  // Private requests for staff of current church
-  const privateRequests = filteredChurchRequests.filter((r) => r.visibility === 'private');
-
-  // Super Admin impersonation action: "Login as [Church]"
   const loginAsChurch = (churchId: string) => {
+    if (!isSuperAdmin) return;
     setCurrentChurchId(churchId);
     setImpersonatedChurchId(churchId);
     setIsImpersonating(true);
-    setActiveRole('church_staff');
+    setRoleOverride('church_staff');
     setActiveTab('wall');
-
-    // Automatically switch active user to the pastor/staff of this church
-    const matchingPastor = users.find(
-      (u) =>
-        (u.churchId === churchId ||
-          (churchId === 'church-calvary-baptist' &&
-            (u.id === 'user-pastor-calvary' || u.name.includes('Williamson')))) &&
-        u.role === 'church_staff'
-    );
-    if (matchingPastor) {
-      setCurrentUser(matchingPastor);
-    }
   };
 
   const exitImpersonation = () => {
     setIsImpersonating(false);
     setImpersonatedChurchId(null);
-    setActiveRole('super_admin');
+    setRoleOverride(null);
     setActiveTab('staff');
   };
 
-  // Submit prayer with AI Moderation
-  const addPrayerRequest = async (data: {
-    title: string;
-    content: string;
-    requesterName: string;
-    requesterEmail?: string;
-    requesterPhone?: string;
-    isAnonymous: boolean;
-    visibility: VisibilityType;
-    category: RequestCategory;
-    isUrgent: boolean;
-  }) => {
+  // Submit prayer with AI moderation; the database makes the final status decision
+  const addPrayerRequest: AppContextType['addPrayerRequest'] = async (data) => {
     setIsModerating(true);
 
-    let moderationResult: any = {
+    let moderationResult: Record<string, any> = {
       status: 'approved',
       safetyScore: 98,
       flags: [],
@@ -622,15 +761,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           content: data.content,
           requesterName: data.isAnonymous ? 'Anonymous' : data.requesterName,
           visibility: data.visibility,
-          churchId: currentChurchId,
+          churchId: currentChurch.id,
         }),
       });
-
       if (response.ok) {
         const json = await response.json();
-        if (json.data) {
-          moderationResult = json.data;
-        }
+        if (json.data) moderationResult = json.data;
       }
     } catch (err) {
       console.warn('Moderation API call error, using local validation:', err);
@@ -638,400 +774,339 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setIsModerating(false);
     }
 
-    // Determine initial status based on moderation & church settings
-    let finalStatus: 'approved' | 'flagged' | 'rejected' = 'approved';
+    const clientStatus =
+      moderationResult.status === 'rejected'
+        ? 'rejected'
+        : moderationResult.status === 'flagged' || moderationResult.flags?.length > 0
+        ? 'flagged'
+        : 'approved';
 
-    if (moderationResult.status === 'rejected') {
-      finalStatus = 'rejected';
-    } else if (moderationResult.status === 'flagged' || moderationResult.flags?.length > 0) {
-      finalStatus = 'flagged';
-    } else if (currentChurch.settings.requireStaffReviewBeforePublish && data.visibility !== 'private') {
-      finalStatus = 'flagged'; // Pending pastor approval if church requires all requests to be vetted
+    const moderation = {
+      safetyScore: moderationResult.safetyScore || 95,
+      flags: moderationResult.flags || [],
+      reason: moderationResult.reason || 'Evaluated by ministry moderation engine.',
+      pastoralRecommendation: moderationResult.pastoralRecommendation || 'approve_public',
+      suggestedBulletinSummary: moderationResult.suggestedBulletinSummary,
+      crisisAssistanceDetected: moderationResult.crisisAssistanceDetected || false,
+    };
+
+    const { data: row, error } = await supabase.rpc('submit_prayer_request', {
+      p: {
+        churchId: currentChurch.id,
+        title: data.title,
+        content: data.content,
+        requesterName: data.requesterName || currentUser?.name || 'Anonymous',
+        requesterEmail: data.requesterEmail || currentUser?.email || '',
+        requesterPhone: data.requesterPhone || currentUser?.phone || '',
+        isAnonymous: data.isAnonymous,
+        visibility: data.visibility,
+        category: (moderationResult.suggestedCategory as RequestCategory) || data.category,
+        isUrgent: data.isUrgent,
+        status: clientStatus,
+        moderation,
+        bulletinSummary: moderationResult.suggestedBulletinSummary || data.title,
+      },
+    });
+
+    if (error || !row) {
+      reportError('Submitting your prayer request', error);
+      return { success: false, status: 'error', reason: error?.message };
     }
 
-    const newRequest: PrayerRequest = {
-      id: `req-${Date.now()}`,
-      userId: currentUser?.id,
-      churchId: currentChurchId,
-      churchName: currentChurch.name,
-      churchSlug: currentChurch.slug,
-      title: data.title,
-      content: data.content,
-      requesterName: data.isAnonymous
-        ? 'Anonymous Church Member'
-        : data.requesterName || currentUser?.name || 'Anonymous',
+    const churchesById = new Map(churches.map((c) => [c.id, c]));
+    const saved: PrayerRequest = {
+      ...requestFromRow(row, undefined, churchesById),
       requesterEmail: data.requesterEmail || currentUser?.email,
       requesterPhone: data.requesterPhone || currentUser?.phone,
-      isAnonymous: data.isAnonymous,
-      visibility: data.visibility,
-      category: (moderationResult.suggestedCategory as RequestCategory) || data.category,
-      isUrgent: data.isUrgent,
-      isAnswered: false,
-      prayerCount: 1, // Requester automatically counts as first prayer
       prayedByMe: true,
-      createdAt: new Date().toISOString(),
-      status: finalStatus,
-      bulletinSummary: moderationResult.suggestedBulletinSummary || data.title,
-      moderation: {
-        safetyScore: moderationResult.safetyScore || 95,
-        flags: moderationResult.flags || [],
-        reason: moderationResult.reason || 'Evaluated by ministry moderation engine.',
-        pastoralRecommendation: moderationResult.pastoralRecommendation || 'approve_public',
-        suggestedBulletinSummary: moderationResult.suggestedBulletinSummary,
-        crisisAssistanceDetected: moderationResult.crisisAssistanceDetected || false,
-      },
-      recentEncouragements: [
-        { text: 'A prayer was lifted up as this request was shared.', date: new Date().toISOString().split('T')[0] }
-      ],
     };
+    setRequests((prev) => [saved, ...prev]);
+    rememberPrayed(saved.id);
 
-    setRequests((prev) => [newRequest, ...prev]);
-
-    return {
-      success: true,
-      status: finalStatus,
-      reason: moderationResult.reason,
-    };
+    return { success: true, status: saved.status, reason: moderationResult.reason };
   };
 
-  // "I Prayed for This" increment
+  const rememberPrayed = (id: string) => {
+    const ids = readPrayedIds();
+    ids.add(id);
+    writeLocal(PRAYED_KEY, JSON.stringify([...ids].slice(-2000)));
+  };
+
+  // "I Prayed for This"
   const incrementPrayerCount = (requestId: string, encouragement?: string) => {
     setRequests((prev) =>
       prev.map((req) => {
         if (req.id !== requestId) return req;
-        const newCount = req.prayerCount + 1;
         const newEncouragements = encouragement
           ? [{ text: encouragement, date: new Date().toISOString().split('T')[0] }, ...(req.recentEncouragements || [])]
           : req.recentEncouragements;
         return {
           ...req,
-          prayerCount: newCount,
+          prayerCount: req.prayerCount + 1,
           prayedByMe: true,
           recentEncouragements: newEncouragements?.slice(0, 5),
         };
       })
     );
+    rememberPrayed(requestId);
+    supabase
+      .rpc('pray_for_request', { request_id: requestId, encouragement: encouragement || null })
+      .then(({ error }) => {
+        if (error) reportError('Recording your prayer', error);
+      });
   };
 
-  // Pastoral Moderation Actions
-  const updateRequestModeration = (
-    requestId: string,
-    action: 'approve_public' | 'keep_private' | 'reject',
-    note?: string
-  ) => {
-    setRequests((prev) =>
-      prev.map((req) => {
-        if (req.id !== requestId) return req;
-        if (action === 'approve_public') {
-          return {
-            ...req,
+  const updateRequestModeration: AppContextType['updateRequestModeration'] = (requestId, action, note) => {
+    const req = requests.find((r) => r.id === requestId);
+    if (!req) return;
+    const reviewed = {
+      ...req.moderation,
+      reviewedBy: currentUser?.name || 'Pastoral Team',
+      reviewedAt: new Date().toISOString(),
+    };
+    const patch: Partial<PrayerRequest> =
+      action === 'approve_public'
+        ? {
             status: 'approved',
             visibility: req.visibility === 'private' ? 'church' : req.visibility,
-            moderation: {
-              ...req.moderation,
-              reviewedBy: 'Pastoral Team',
-              reviewedAt: new Date().toISOString(),
-              reason: note || 'Approved by church staff for prayer wall.',
-            },
-          };
-        } else if (action === 'keep_private') {
-          return {
-            ...req,
+            moderation: { ...reviewed, reason: note || 'Approved by church staff for prayer wall.' },
+          }
+        : action === 'keep_private'
+        ? {
             status: 'approved',
             visibility: 'private',
-            moderation: {
-              ...req.moderation,
-              reviewedBy: 'Pastoral Team',
-              reviewedAt: new Date().toISOString(),
-              reason: note || 'Marked confidential for staff/pastoral prayer team only.',
-            },
-          };
-        } else {
-          return {
-            ...req,
+            moderation: { ...reviewed, reason: note || 'Marked confidential for staff/pastoral prayer team only.' },
+          }
+        : {
             status: 'rejected',
-            moderation: {
-              ...req.moderation,
-              reviewedBy: 'Pastoral Team',
-              reviewedAt: new Date().toISOString(),
-              reason: note || 'Declined by pastoral staff.',
-            },
+            moderation: { ...reviewed, reason: note || 'Declined by pastoral staff.' },
           };
-        }
-      })
-    );
+    saveRequestChanges([{ id: requestId, patch }], 'Updating moderation');
   };
 
-  // Update Sunday Bulletin summary line
   const updateBulletinSummary = (requestId: string, summary: string) => {
-    setRequests((prev) =>
-      prev.map((r) => (r.id === requestId ? { ...r, bulletinSummary: summary } : r))
-    );
+    saveRequestChanges([{ id: requestId, patch: { bulletinSummary: summary } }], 'Updating bulletin line');
   };
 
-  // Toggle Answered Prayer / Praise
+  const updateStaffNotes = (requestId: string, notes: string) => {
+    saveRequestChanges([{ id: requestId, patch: { staffNotes: notes } }], 'Saving care note');
+  };
+
   const togglePrayerAnswered = (requestId: string, updateNote?: string) => {
-    setRequests((prev) =>
-      prev.map((r) => {
-        if (r.id !== requestId) return r;
-        return {
-          ...r,
-          isAnswered: !r.isAnswered,
-          category: !r.isAnswered ? 'Praise & Thanksgiving' : r.category,
-          answeredUpdate: updateNote || r.answeredUpdate || 'Praise God! The Lord answered this prayer.',
-        };
-      })
+    const r = requests.find((x) => x.id === requestId);
+    if (!r) return;
+    saveRequestChanges(
+      [
+        {
+          id: requestId,
+          patch: {
+            isAnswered: !r.isAnswered,
+            category: !r.isAnswered ? 'Praise & Thanksgiving' : r.category,
+            answeredUpdate: updateNote || r.answeredUpdate || 'Praise God! The Lord answered this prayer.',
+          },
+        },
+      ],
+      'Updating answered prayer'
     );
   };
 
-  // Update Church Profile & Settings
   const updateChurchProfile = (churchId: string, updates: Partial<Church>) => {
-    setChurches((prev) =>
-      prev.map((church) => (church.id === churchId ? { ...church, ...updates } : church))
-    );
-  };
-
-  // Bulk update bulletin summaries (for 75+ weekly compression)
-  const bulkUpdateBulletinSummaries = (updates: Array<{ id: string; ultraSummary: string }>) => {
-    const updateMap = new Map(updates.map((u) => [u.id, u.ultraSummary]));
-    setRequests((prev) =>
-      prev.map((r) => {
-        if (updateMap.has(r.id)) {
-          return { ...r, bulletinSummary: updateMap.get(r.id)! };
+    setChurches((prev) => prev.map((church) => (church.id === churchId ? { ...church, ...updates } : church)));
+    const { id: _ignored, ...rest } = updates;
+    supabase
+      .from('churches')
+      .update(churchToRow(rest))
+      .eq('id', churchId)
+      .then(({ error }) => {
+        if (error) {
+          reportError('Saving church settings', error);
+          refreshData();
         }
-        return r;
-      })
+      });
+  };
+
+  const bulkUpdateBulletinSummaries = (updates: Array<{ id: string; ultraSummary: string }>) => {
+    saveRequestChanges(
+      updates.map((u) => ({ id: u.id, patch: { bulletinSummary: u.ultraSummary } })),
+      'Saving bulletin lines'
     );
   };
 
-  // Reset or load the full 75-request weekly roster for Grace Fellowship
+  // Loads the 75-request demo roster into the current church (super admin testing tool)
   const load75WeeklyRequests = () => {
-    const existingIds = new Set(SAMPLE_75_WEEKLY_REQUESTS.map((r) => r.id));
-    const nonSample = requests.filter((r) => !existingIds.has(r.id));
-    setRequests([...SAMPLE_75_WEEKLY_REQUESTS, ...nonSample]);
+    if (!canManageCurrentChurch || !currentChurch.id) return;
+    if (!window.confirm(`Add 75 sample prayer requests to ${currentChurch.name}? They will be visible on its wall.`)) return;
+    const now = Date.now();
+    const copies: PrayerRequest[] = SAMPLE_75_WEEKLY_REQUESTS.map((r, i) => ({
+      ...r,
+      id: newId('demo'),
+      churchId: currentChurch.id,
+      churchName: currentChurch.name,
+      churchSlug: currentChurch.slug,
+      userId: undefined,
+      createdAt: r.createdAt || new Date(now - i * 60000).toISOString(),
+    }));
+    setRequests((prev) => [...copies, ...prev]);
+    insertRequests(copies, 'Loading demo requests').catch((e) => {
+      reportError('Loading demo requests', e);
+      refreshData();
+    });
   };
 
-  // Toggle archive status on the Prayer Wall (retains in Staff Archive Vault)
   const togglePrayerArchived = (requestId: string, reason?: string) => {
-    setRequests((prev) =>
-      prev.map((r) => {
-        if (r.id !== requestId) return r;
-        const willArchive = !r.isArchived;
-        return {
-          ...r,
-          isArchived: willArchive,
-          archivedAt: willArchive ? new Date().toISOString() : undefined,
-          archivedReason: willArchive ? (reason || 'Archived from active prayer wall') : undefined,
-        };
-      })
+    const r = requests.find((x) => x.id === requestId);
+    if (!r) return;
+    const willArchive = !r.isArchived;
+    saveRequestChanges(
+      [
+        {
+          id: requestId,
+          patch: {
+            isArchived: willArchive,
+            archivedAt: willArchive ? new Date().toISOString() : undefined,
+            archivedReason: willArchive ? reason || 'Archived from active prayer wall' : undefined,
+          },
+        },
+      ],
+      'Archiving prayer'
     );
   };
 
-  // Toggle print-specific archive (excludes from print document without removing from wall)
   const togglePrintArchived = (requestId: string) => {
-    setRequests((prev) =>
-      prev.map((r) => {
-        if (r.id !== requestId) return r;
-        const willArchive = !r.isArchivedFromPrint;
-        return {
-          ...r,
-          isArchivedFromPrint: willArchive,
-          archivedFromPrintAt: willArchive ? new Date().toISOString() : undefined,
-        };
-      })
+    const r = requests.find((x) => x.id === requestId);
+    if (!r) return;
+    const willArchive = !r.isArchivedFromPrint;
+    saveRequestChanges(
+      [
+        {
+          id: requestId,
+          patch: {
+            isArchivedFromPrint: willArchive,
+            archivedFromPrintAt: willArchive ? new Date().toISOString() : undefined,
+          },
+        },
+      ],
+      'Archiving from bulletin'
     );
   };
 
-  // "Archive Last Week's Prayers (Print Only)" - rotates off prayers from the print set
   const archiveLastWeeksPrayersForPrint = (daysOld: number = 4) => {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - daysOld);
-
-    let count = 0;
-    setRequests((prev) =>
-      prev.map((r) => {
-        if (r.churchId !== currentChurchId) return r;
-        // If not already archived from print and was created prior to cutoff
-        if (!r.isArchivedFromPrint) {
-          const createdDate = new Date(r.createdAt);
-          if (createdDate <= cutoff) {
-            count++;
-            return {
-              ...r,
-              isArchivedFromPrint: true,
-              archivedFromPrintAt: new Date().toISOString(),
-            };
-          }
-        }
-        return r;
-      })
+    const now = new Date().toISOString();
+    const targets = filteredChurchRequests.filter((r) => !r.isArchivedFromPrint && new Date(r.createdAt) <= cutoff);
+    saveRequestChanges(
+      targets.map((r) => ({ id: r.id, patch: { isArchivedFromPrint: true, archivedFromPrintAt: now } })),
+      'Archiving last week from bulletin'
     );
-    return count;
+    return targets.length;
   };
 
-  // Restore all print archives back into the active print set
   const restoreAllPrintArchives = () => {
-    setRequests((prev) =>
-      prev.map((r) => {
-        if (r.churchId === currentChurchId && r.isArchivedFromPrint) {
-          return { ...r, isArchivedFromPrint: false, archivedFromPrintAt: undefined };
-        }
-        return r;
-      })
+    const targets = filteredChurchRequests.filter((r) => r.isArchivedFromPrint);
+    saveRequestChanges(
+      targets.map((r) => ({ id: r.id, patch: { isArchivedFromPrint: false, archivedFromPrintAt: undefined } })),
+      'Restoring bulletin archive'
     );
   };
 
-  // Bulk archive answered prayers from wall to vault
   const bulkArchiveAnsweredPrayers = () => {
-    let count = 0;
-    setRequests((prev) =>
-      prev.map((r) => {
-        if (r.churchId === currentChurchId && r.isAnswered && !r.isArchived) {
-          count++;
-          return {
-            ...r,
-            isArchived: true,
-            archivedAt: new Date().toISOString(),
-            archivedReason: 'Answered prayer archived to testimony vault',
-          };
-        }
-        return r;
-      })
+    const now = new Date().toISOString();
+    const targets = filteredChurchRequests.filter((r) => r.isAnswered && !r.isArchived);
+    saveRequestChanges(
+      targets.map((r) => ({
+        id: r.id,
+        patch: { isArchived: true, archivedAt: now, archivedReason: 'Answered prayer archived to testimony vault' },
+      })),
+      'Archiving answered prayers'
     );
-    return count;
+    return targets.length;
   };
 
-  // Bulk archive wall prayers older than specified days (default 30 days)
   const bulkArchiveOlderWallPrayers = (daysOld: number = 30) => {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - daysOld);
-    let count = 0;
-
-    setRequests((prev) =>
-      prev.map((r) => {
-        if (r.churchId === currentChurchId && !r.isArchived) {
-          const created = new Date(r.createdAt);
-          if (created <= cutoff) {
-            count++;
-            return {
-              ...r,
-              isArchived: true,
-              archivedAt: new Date().toISOString(),
-              archivedReason: `Archived as older than ${daysOld} days`,
-            };
-          }
-        }
-        return r;
-      })
+    const now = new Date().toISOString();
+    const targets = filteredChurchRequests.filter((r) => !r.isArchived && new Date(r.createdAt) <= cutoff);
+    saveRequestChanges(
+      targets.map((r) => ({
+        id: r.id,
+        patch: { isArchived: true, archivedAt: now, archivedReason: `Archived as older than ${daysOld} days` },
+      })),
+      'Archiving older prayers'
     );
-    return count;
+    return targets.length;
   };
 
-  // Restore all wall archives for current church
   const restoreAllWallArchives = () => {
-    setRequests((prev) =>
-      prev.map((r) => {
-        if (r.churchId === currentChurchId && r.isArchived) {
-          return {
-            ...r,
-            isArchived: false,
-            archivedAt: undefined,
-            archivedReason: undefined,
-          };
-        }
-        return r;
-      })
+    const targets = filteredChurchRequests.filter((r) => r.isArchived);
+    saveRequestChanges(
+      targets.map((r) => ({
+        id: r.id,
+        patch: { isArchived: false, archivedAt: undefined, archivedReason: undefined },
+      })),
+      'Restoring archived prayers'
     );
   };
 
-  // Add new client church (Super Admin feature)
+  // Super admin: add a client church directly
   const addNewChurch = (churchData: Omit<Church, 'id'>) => {
-    const isCalvary =
-      churchData.name.trim().toLowerCase().includes('calvary') ||
-      churchData.slug.trim().toLowerCase().includes('calvary');
-
-    if (isCalvary) {
-      const canonicalId = 'church-calvary-baptist';
-      const updatedChurch: Church = {
-        ...churchData,
-        id: canonicalId,
-        pastorName: churchData.pastorName || 'Pastor Greg Williamson',
-        websiteUrl: churchData.websiteUrl || 'https://calvarybaptistalcoa.org',
-      };
-      setChurches((prev) => {
-        const filtered = prev.filter(
-          (c) => c.id !== canonicalId && !c.name.toLowerCase().includes('calvary')
-        );
-        return [...filtered, updatedChurch];
-      });
-      return canonicalId;
-    }
-
-    // If church with this name or slug already exists, update it cleanly
-    const existingIndex = churches.findIndex(
+    const existing = churches.find(
       (c) =>
         c.name.trim().toLowerCase() === churchData.name.trim().toLowerCase() ||
         c.slug.trim().toLowerCase() === churchData.slug.trim().toLowerCase()
     );
-
-    if (existingIndex >= 0) {
-      const existingId = churches[existingIndex].id;
-      const updatedChurch: Church = {
-        ...churches[existingIndex],
-        ...churchData,
-        id: existingId,
-      };
-      setChurches((prev) => prev.map((c) => (c.id === existingId ? updatedChurch : c)));
-      return existingId;
+    if (existing) {
+      updateChurchProfile(existing.id, churchData);
+      return existing.id;
     }
 
-    const newId = `church-${Date.now()}`;
-    const newChurch: Church = {
-      ...churchData,
-      id: newId,
-    };
-    setChurches((prev) => [...prev, newChurch]);
-    return newId;
-  };
-
-  const [importModalOpen, setImportModalOpen] = useState(false);
-  const [isAICategorizing, setIsAICategorizing] = useState(false);
-
-  // Self-heal any requests where the title was erroneously set to a date
-  const repairDateTitles = (): number => {
-    let fixedCount = 0;
-    setRequests((prev) =>
-      prev.map((r) => {
-        if (
-          isDateString(r.title) ||
-          isDateString(r.bulletinSummary) ||
-          r.title === r.requesterName ||
-          r.title === 'Wanda D.' ||
-          r.title === 'Karen' ||
-          r.title === 'Sue S.' ||
-          r.title === 'Joy' ||
-          (r.category === 'General' && r.content && r.content.length > 3) ||
-          (r.category === 'General' && (r.content.includes('doctor') || r.content.includes('surgery') || r.content.includes('cancer') || r.content.includes('bleed') || r.content.includes('treatment')))
-        ) {
-          fixedCount++;
-          return healPrayerRequest(r);
+    const church: Church = { ...churchData, id: newId('church') };
+    setChurches((prev) => [...prev, church].sort((a, b) => a.name.localeCompare(b.name)));
+    supabase
+      .from('churches')
+      .insert(churchToRow(church))
+      .then(({ error }) => {
+        if (error) {
+          reportError('Adding church', error);
+          refreshData();
         }
-        return r;
-      })
-    );
-    return fixedCount;
+      });
+    return church.id;
   };
 
-  // AI-powered batch categorization and title organization using Gemini
+  // Fix requests whose title was erroneously set to a date (staff only: it saves changes)
+  const repairDateTitles = (): number => {
+    if (!canManageCurrentChurch) return 0;
+    const targets = filteredChurchRequests.filter(
+      (r) =>
+        isDateString(r.title) ||
+        isDateString(r.bulletinSummary) ||
+        r.title === r.requesterName ||
+        (r.category === 'General' && r.content && r.content.length > 3)
+    );
+    const changes = targets
+      .map((r) => {
+        const healed = healPrayerRequest(r);
+        const patch: Partial<PrayerRequest> = {};
+        for (const key of ['title', 'content', 'bulletinSummary', 'category', 'createdAt'] as const) {
+          if (healed[key] !== r[key]) (patch as Record<string, unknown>)[key] = healed[key];
+        }
+        return { id: r.id, patch };
+      })
+      .filter((c) => Object.keys(c.patch).length > 0);
+    saveRequestChanges(changes, 'Repairing request titles');
+    return changes.length;
+  };
+
+  // AI-powered batch categorization and title organization
   const categorizePrayersWithAI = async (
     targetRequests?: PrayerRequest[]
   ): Promise<{ success: boolean; count: number }> => {
     const toProcess =
       targetRequests ||
-      requests.filter(
-        (r) =>
-          r.churchId === currentChurchId &&
-          (r.category === 'General' || isDateString(r.title) || r.title.length < 5)
+      filteredChurchRequests.filter(
+        (r) => r.category === 'General' || isDateString(r.title) || r.title.length < 5
       );
 
     if (toProcess.length === 0) return { success: true, count: 0 };
@@ -1054,35 +1129,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (!res.ok) throw new Error('API failed');
       const data = await res.json();
       if (data.success && Array.isArray(data.results)) {
-        const resultMap = new Map<string, any>();
-        data.results.forEach((it: any) => resultMap.set(it.id, it));
-
-        setRequests((prev) =>
-          prev.map((r) => {
-            const match = resultMap.get(r.id);
-            if (match) {
-              const healed = healPrayerRequest(r);
-              const finalTitle =
-                match.refinedTitle && !isDateString(match.refinedTitle)
-                  ? match.refinedTitle
-                  : healed.title;
-
-              return {
-                ...healed,
-                category: match.category as RequestCategory,
+        const byId = new Map(toProcess.map((r) => [r.id, r]));
+        const changes = data.results
+          .filter((match: { id: string }) => byId.has(match.id))
+          .map((match: { id: string; refinedTitle?: string; category: RequestCategory; isUrgent?: boolean; isAnswered?: boolean }) => {
+            const healed = healPrayerRequest(byId.get(match.id)!);
+            const finalTitle =
+              match.refinedTitle && !isDateString(match.refinedTitle) ? match.refinedTitle : healed.title;
+            return {
+              id: match.id,
+              patch: {
                 title: finalTitle,
-                isUrgent: match.isUrgent !== undefined ? match.isUrgent : r.isUrgent,
-                isAnswered: match.isAnswered !== undefined ? match.isAnswered : r.isAnswered,
-                visibility: 'church' as const, // All imported ones will go on the church wall
-                status: 'approved' as const,
+                content: healed.content,
+                category: match.category,
+                isUrgent: match.isUrgent ?? healed.isUrgent,
+                isAnswered: match.isAnswered ?? healed.isAnswered,
                 bulletinSummary: finalTitle,
-              };
-            }
-            return healPrayerRequest(r);
-          })
-        );
-        setIsAICategorizing(false);
-        return { success: true, count: data.results.length };
+              } as Partial<PrayerRequest>,
+            };
+          });
+        saveRequestChanges(changes, 'Saving AI categories');
+        return { success: true, count: changes.length };
       }
     } catch (e) {
       console.warn('AI batch categorization failed, using heuristic healing:', e);
@@ -1090,51 +1157,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setIsAICategorizing(false);
     }
 
-    // Fallback: heal any date titles even if network request fails
+    // Fallback: heal any date titles even if the AI request fails
     repairDateTitles();
     return { success: true, count: toProcess.length };
   };
 
-  // Mount effect to automatically heal date titles and categorize imported prayers
-  useEffect(() => {
-    const hasDateTitles = requests.some((r) => isDateString(r.title));
-    if (hasDateTitles) {
-      repairDateTitles();
-    }
-  }, []);
-
-  const importPrayerRequestsBatch = (
-    newItems: Array<{
-      title: string;
-      content: string;
-      requesterName?: string;
-      requesterEmail?: string;
-      requesterPhone?: string;
-      isAnonymous?: boolean;
-      visibility?: VisibilityType;
-      category?: RequestCategory;
-      isUrgent?: boolean;
-      isAnswered?: boolean;
-      churchId?: string;
-      status?: ModerationStatus;
-      createdAt?: string;
-    }>
-  ): number => {
-    const targetChurch = currentChurch;
+  const importPrayerRequestsBatch: AppContextType['importPrayerRequestsBatch'] = (newItems) => {
     const now = new Date();
 
     const createdRequests: PrayerRequest[] = newItems.map((item, idx) => {
-      const targetChurchId = item.churchId || targetChurch.id;
-      const churchObj = churches.find((c) => c.id === targetChurchId) || targetChurch;
-      const isUrgent = Boolean(item.isUrgent);
-      const isAnswered = Boolean(item.isAnswered);
-      const category: RequestCategory = item.category || 'General';
+      const targetChurchId = item.churchId || currentChurch.id;
+      const churchObj = churches.find((c) => c.id === targetChurchId) || currentChurch;
 
-      // The user specified: "all imported ones will go on the church wall"
-      const visibility: VisibilityType = 'church';
-      const status: ModerationStatus = 'approved';
-
-      // Ensure date is not used as title
       const rawTitle = item.title.trim();
       const rawContent = item.content.trim();
       let cleanedTitle = rawTitle;
@@ -1142,33 +1176,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       if (isDateString(cleanedTitle)) {
         parsedDate = parseDateToISO(cleanedTitle) || parsedDate;
-        cleanedTitle = rawContent && !isDateString(rawContent)
-          ? (rawContent.length > 70 ? rawContent.substring(0, 67) + '...' : rawContent)
-          : 'Prayer Request';
+        cleanedTitle =
+          rawContent && !isDateString(rawContent)
+            ? rawContent.length > 70
+              ? rawContent.substring(0, 67) + '...'
+              : rawContent
+            : 'Prayer Request';
       }
 
-      const finalTitle = cleanedTitle || (rawContent.length > 70 ? rawContent.substring(0, 67) + '...' : rawContent) || 'Prayer Request';
+      const finalTitle =
+        cleanedTitle || (rawContent.length > 70 ? rawContent.substring(0, 67) + '...' : rawContent) || 'Prayer Request';
       const finalContent = rawContent || finalTitle || 'Please lift this request in prayer.';
 
       return {
-        id: `csv-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 6)}`,
+        id: newId('csv'),
         churchId: targetChurchId,
         churchName: churchObj.name,
         churchSlug: churchObj.slug,
         title: finalTitle,
         content: finalContent,
-        requesterName: item.isAnonymous ? 'Anonymous' : (item.requesterName?.trim() || 'Church Member'),
+        requesterName: item.isAnonymous ? 'Anonymous' : item.requesterName?.trim() || 'Church Member',
         requesterEmail: item.requesterEmail?.trim() || undefined,
         requesterPhone: item.requesterPhone?.trim() || undefined,
         isAnonymous: Boolean(item.isAnonymous),
-        visibility, // Church Wall
-        category,
-        isUrgent,
-        isAnswered,
+        visibility: 'church', // all imported requests go on the church wall
+        category: item.category || 'General',
+        isUrgent: Boolean(item.isUrgent),
+        isAnswered: Boolean(item.isAnswered),
         prayerCount: 1,
         createdAt: parsedDate || new Date(now.getTime() - idx * 60000).toISOString(),
-        status, // Approved for wall
+        status: 'approved',
         bulletinSummary: finalTitle.length > 50 ? finalTitle.substring(0, 47) + '...' : finalTitle,
+        recentEncouragements: [],
         moderation: {
           safetyScore: 98,
           flags: [],
@@ -1181,21 +1220,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
 
     setRequests((prev) => [...createdRequests, ...prev]);
-
-    // Automatically trigger AI categorization and organization on newly imported requests
-    setTimeout(() => {
-      categorizePrayersWithAI(createdRequests);
-    }, 100);
+    insertRequests(createdRequests, 'Importing prayer requests')
+      .then(() => categorizePrayersWithAI(createdRequests))
+      .catch((e) => {
+        reportError('Importing prayer requests', e);
+        refreshData();
+      });
 
     return createdRequests.length;
   };
+
+  // After loading, quietly repair date-like titles for staff of this church
+  const repairedChurches = useRef(new Set<string>());
+  useEffect(() => {
+    if (isLoading || !canManageCurrentChurch || repairedChurches.current.has(currentChurch.id)) return;
+    repairedChurches.current.add(currentChurch.id);
+    if (filteredChurchRequests.some((r) => isDateString(r.title))) repairDateTitles();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading, canManageCurrentChurch, currentChurch.id]);
 
   return (
     <AppContext.Provider
       value={{
         churches,
         currentChurch,
-        currentChurchId,
+        currentChurchId: currentChurch.id,
         setCurrentChurchId,
         activeRole,
         setActiveRole,
@@ -1214,6 +1263,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setSubmitModalOpen,
         users,
         currentUser,
+        isSuperAdmin,
         directory,
         loginModalOpen,
         setLoginModalOpen,
@@ -1223,7 +1273,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         login,
         logout,
         register,
-        switchAccount,
+        registerChurch,
+        sendPasswordReset,
+        approveMember,
+        setMemberRole,
+        revokeMember,
+        notifications,
+        markNotificationsRead,
         resubmitPrayerRequest,
         addDirectoryMember,
         updateDirectoryMember,
@@ -1232,6 +1288,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         incrementPrayerCount,
         updateRequestModeration,
         updateBulletinSummary,
+        updateStaffNotes,
         bulkUpdateBulletinSummaries,
         togglePrayerAnswered,
         updateChurchProfile,
@@ -1251,6 +1308,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         repairDateTitles,
         categorizePrayersWithAI,
         isAICategorizing,
+        isLoading,
+        dataError,
+        clearDataError: () => setDataError(null),
+        refreshData,
       }}
     >
       {children}

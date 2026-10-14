@@ -54,6 +54,15 @@ export const SubmitPrayerModal: React.FC = () => {
   const [requesterName, setRequesterName] = useState(currentUser?.name || '');
   const [requesterEmail, setRequesterEmail] = useState(currentUser?.email || '');
   const [requesterPhone, setRequesterPhone] = useState(currentUser?.phone || '');
+
+  // The account may finish loading after this form is created; fill in the person's details on open
+  useEffect(() => {
+    if (submitModalOpen && currentUser) {
+      setRequesterName((n) => n || currentUser.name);
+      setRequesterEmail((e) => e || currentUser.email);
+      setRequesterPhone((p) => p || currentUser.phone || '');
+    }
+  }, [submitModalOpen, currentUser]);
   const [isAnonymous, setIsAnonymous] = useState(false);
   const [visibility, setVisibility] = useState<VisibilityType>('church');
   const [category, setCategory] = useState<RequestCategory>('Health & Healing');
@@ -197,6 +206,14 @@ export const SubmitPrayerModal: React.FC = () => {
         category,
         isUrgent,
       });
+
+      if (!res.success) {
+        setSubmitResult({
+          status: 'error',
+          message: 'Your prayer request could not be saved. Please check your connection and try again.',
+        });
+        return;
+      }
 
       // Fetch a gentle Scripture encouragement for the requester
       let encouragementNote = '';

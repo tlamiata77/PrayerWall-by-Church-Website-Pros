@@ -3,6 +3,8 @@ import { useApp } from '../context/AppContext';
 import { resizeImageFile } from '../utils/imageResize';
 import { PrayerRequest, Church, ChurchThemeColor } from '../types';
 import { PRESET_THEMES, getChurchTheme } from '../utils/theme';
+import { MembersPanel } from './MembersPanel';
+import { SuperAdminPanel } from './SuperAdminPanel';
 import {
   ShieldAlert,
   ShieldCheck,
@@ -60,10 +62,15 @@ export const StaffModerationPortal: React.FC = () => {
     currentUser,
     openLoginModal,
     users,
-    switchAccount,
+    requests,
+    updateStaffNotes,
   } = useApp();
 
-  const [activeSubTab, setActiveSubTab] = useState<'moderation' | 'private_vault' | 'archive_vault' | 'settings' | 'super_admin'>(
+  const pendingMemberCount = users.filter(
+    (u) => u.churchId === currentChurch.id && !u.approved && u.role !== 'super_admin'
+  ).length;
+
+  const [activeSubTab, setActiveSubTab] = useState<'moderation' | 'private_vault' | 'archive_vault' | 'members' | 'settings' | 'super_admin'>(
     activeRole === 'super_admin' && !isImpersonating ? 'super_admin' : 'moderation'
   );
 
@@ -166,12 +173,7 @@ export const StaffModerationPortal: React.FC = () => {
   };
 
   // Special Access Gate: Pastors and staff special access
-  const isAuthorizedStaff =
-    activeRole === 'church_staff' ||
-    activeRole === 'super_admin' ||
-    isImpersonating ||
-    currentUser?.role === 'church_staff' ||
-    currentUser?.role === 'super_admin';
+  const isAuthorizedStaff = activeRole === 'church_staff' || activeRole === 'super_admin';
 
   if (!isAuthorizedStaff) {
     return (
@@ -211,28 +213,9 @@ export const StaffModerationPortal: React.FC = () => {
               className="w-full sm:w-auto px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-xs cursor-pointer flex items-center justify-center gap-2"
             >
               <KeyRound className="w-4 h-4" />
-              <span>Sign In with Staff Password</span>
+              <span>{currentUser ? `Signed in as ${currentUser.email}` : 'Staff Sign In'}</span>
             </button>
 
-            <button
-              onClick={() => {
-                const pastor =
-                  users.find(
-                    (u) =>
-                      u.role === 'church_staff' &&
-                      (u.churchId === currentChurch.id ||
-                        (currentChurch.id === 'church-calvary-baptist' &&
-                          (u.id === 'user-pastor-calvary' || u.name.includes('Williamson'))))
-                  ) || users[0];
-                if (pastor) switchAccount(pastor.id);
-              }}
-              className="w-full sm:w-auto px-5 py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-lg text-xs font-semibold cursor-pointer flex items-center justify-center gap-2"
-            >
-              <Sparkles className="w-4 h-4 text-amber-600" />
-              <span>
-                Quick Demo: Switch to {currentChurch.pastorName || 'Senior Pastor'} ({currentChurch.name})
-              </span>
-            </button>
           </div>
         </div>
       </div>
@@ -336,6 +319,23 @@ export const StaffModerationPortal: React.FC = () => {
           </button>
 
           <button
+            onClick={() => setActiveSubTab('members')}
+            className={`px-3 py-1.5 rounded-lg font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
+              activeSubTab === 'members'
+                ? 'bg-emerald-700 text-white shadow-xs'
+                : 'text-stone-600 hover:text-stone-900'
+            }`}
+          >
+            <UserCheck className="w-3.5 h-3.5" />
+            <span>Members</span>
+            {pendingMemberCount > 0 && (
+              <span className="bg-amber-100 text-amber-900 px-1.5 py-0.2 rounded-full font-bold text-[10px]">
+                {pendingMemberCount} new
+              </span>
+            )}
+          </button>
+
+          <button
             onClick={() => setActiveSubTab('settings')}
             className={`px-3 py-1.5 rounded-lg font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
               activeSubTab === 'settings'
@@ -353,6 +353,8 @@ export const StaffModerationPortal: React.FC = () => {
       {/* SUB-TAB 1: SUPER ADMIN MULTI-CHURCH ROSTER (The "Login As" feature requested by user!) */}
       {activeSubTab === 'super_admin' && (
         <div className="space-y-6">
+          <SuperAdminPanel />
+
           <div className="bg-amber-500/10 border border-amber-300 rounded-2xl p-5 flex flex-wrap items-center justify-between gap-4">
             <div className="space-y-1">
               <span className="text-xs font-bold uppercase tracking-wider text-amber-800 flex items-center gap-1.5">
@@ -397,7 +399,7 @@ export const StaffModerationPortal: React.FC = () => {
                 </thead>
                 <tbody className="divide-y divide-stone-100">
                   {churches.map((church) => {
-                    const churchReqs = filteredChurchRequests.filter((r) => r.churchId === church.id);
+                    const churchReqs = requests.filter((r) => r.churchId === church.id);
                     const isCurrentlyActive = currentChurch.id === church.id;
 
                     return (
@@ -521,6 +523,8 @@ export const StaffModerationPortal: React.FC = () => {
           </div>
         </div>
       )}
+
+      {activeSubTab === 'members' && <MembersPanel />}
 
       {/* SUB-TAB 2: AI MODERATION QUEUE */}
       {activeSubTab === 'moderation' && (
@@ -737,7 +741,7 @@ export const StaffModerationPortal: React.FC = () => {
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => {
-                              req.staffNotes = noteText;
+                              updateStaffNotes(req.id, noteText);
                               setEditingNoteId(null);
                             }}
                             className="px-3 py-1 bg-purple-700 text-white rounded font-bold cursor-pointer"
