@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContext';
 import { PrayerRequest, RequestCategory, WallLayoutType } from '../types';
 import { getChurchTheme } from '../utils/theme';
 import { ChurchBrandingModal } from './ChurchBrandingModal';
+import { EditPrayerModal } from './EditPrayerModal';
 import {
   Heart,
   Sparkles,
@@ -32,7 +33,8 @@ import {
   MapPin,
   Phone,
   Mail,
-  Upload
+  Upload,
+  Pencil,
 } from 'lucide-react';
 
 const CATEGORIES: RequestCategory[] = [
@@ -70,6 +72,7 @@ export const PrayerWall: React.FC<PrayerWallProps> = ({ forceSingleColumn = fals
 
   const currentTheme = getChurchTheme(currentChurch);
   const [brandingModalOpen, setBrandingModalOpen] = useState(false);
+  const [editingRequest, setEditingRequest] = useState<PrayerRequest | null>(null);
 
   const [wallLayout, setWallLayout] = useState<WallLayoutType>(() => {
     return overrideLayout || currentChurch.settings?.defaultWallLayout || 'grid';
@@ -786,6 +789,15 @@ export const PrayerWall: React.FC<PrayerWallProps> = ({ forceSingleColumn = fals
                     {(activeRole === 'church_staff' || activeRole === 'super_admin') && (
                       <div className="flex items-center gap-1.5">
                         <button
+                          onClick={() => setEditingRequest(req)}
+                          className="text-xs px-2.5 py-1.5 rounded-md font-medium transition-colors cursor-pointer flex items-center gap-1 text-stone-600 hover:text-stone-900 hover:bg-stone-100 border border-stone-200"
+                          title="Correct the name, wording, category, date or contact details"
+                        >
+                          <Pencil className="w-3.5 h-3.5 text-stone-400" />
+                          <span>Edit</span>
+                        </button>
+
+                        <button
                           onClick={() => togglePrayerAnswered(req.id)}
                           className={`text-xs px-2 py-1.5 rounded-md font-medium transition-colors cursor-pointer ${
                             req.isAnswered
@@ -879,6 +891,8 @@ export const PrayerWall: React.FC<PrayerWallProps> = ({ forceSingleColumn = fals
           ))}
         </div>
       )}
+
+      <EditPrayerModal request={editingRequest} onClose={() => setEditingRequest(null)} />
 
       {/* Church Branding & Theme Customizer Modal */}
       <ChurchBrandingModal
