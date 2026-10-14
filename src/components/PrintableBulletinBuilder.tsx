@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { RequestCategory, PrayerRequest } from '../types';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
 import { isDateString } from '../utils/csvParser';
 import {
   Printer,
@@ -68,6 +66,7 @@ export const PrintableBulletinBuilder: React.FC = () => {
   const [includeAnsweredPraises, setIncludeAnsweredPraises] = useState(true);
   const [includeContactInfo, setIncludeContactInfo] = useState(false);
   const [showCheckboxes, setShowCheckboxes] = useState(false);
+  const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait');
   const [dateFilter, setDateFilter] = useState<'all' | '14days' | '30days'>('all');
   
   // Print Archive View Mode: 'active' (what will print this Sunday) vs 'archived' (past printed items)
@@ -98,7 +97,6 @@ export const PrintableBulletinBuilder: React.FC = () => {
   const [editText, setEditText] = useState('');
   const [isPolishingAI, setIsPolishingAI] = useState(false);
   const [aiCompressedCount, setAiCompressedCount] = useState<number | null>(null);
-  const [isExportingPDF, setIsExportingPDF] = useState(false);
   const [pdfProgressMessage, setPdfProgressMessage] = useState<string | null>(null);
 
   // High-Volume Presets
@@ -262,72 +260,16 @@ export const PrintableBulletinBuilder: React.FC = () => {
     return summary.replace(/^\[[^\]]+\]\s*/, '').trim();
   };
 
-  // High-Quality PDF Downloader using html2canvas & jsPDF
-  const handleDownloadPDF = async () => {
-    setIsExportingPDF(true);
-    setPdfProgressMessage('Preparing high-resolution PDF...');
-    try {
-      const element = document.querySelector('.printable-area') as HTMLElement;
-      if (!element) {
-        window.print();
-        return;
-      }
-
-      setPdfProgressMessage('Rendering print typography...');
-      const canvas = await html2canvas(element, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff',
-        scrollX: 0,
-        scrollY: 0,
-        windowWidth: 1200,
-        onclone: (clonedDoc) => {
-          const el = clonedDoc.querySelector('.printable-area') as HTMLElement;
-          if (el) {
-            el.style.boxShadow = 'none';
-            el.style.transform = 'none';
-          }
-        },
-      });
-
-      setPdfProgressMessage('Compiling PDF pages...');
-      const imgData = canvas.toDataURL('image/jpeg', 0.96);
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'pt',
-        format: 'letter', // 612 x 792 pt
-      });
-
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-      const imgWidth = pdfWidth;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-      let heightLeft = imgHeight;
-      let position = 0;
-
-      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pdfHeight;
-
-      while (heightLeft > 5) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pdfHeight;
-      }
-
-      const safeName = (currentChurch.name || 'Church').replace(/[^a-zA-Z0-9]/g, '_');
-      const dateStr = new Date().toISOString().split('T')[0];
-      pdf.save(`${safeName}_Sunday_Prayer_Bulletin_${dateStr}.pdf`);
-      setPdfProgressMessage('PDF Downloaded successfully!');
-      setTimeout(() => setPdfProgressMessage(null), 3500);
-    } catch (err) {
-      console.error('Error downloading PDF:', err);
-      window.print();
-    } finally {
-      setIsExportingPDF(false);
-    }
+  // Save as PDF uses the browser's own print engine, which lays out real text and
+  // breaks pages between prayer requests (the old html2canvas screenshot approach
+  // crashed on Tailwind's oklch colors and sliced lines in half at page edges).
+  const handleDownloadPDF = () => {
+    setPdfProgressMessage(
+      'In the print window, set Destination (or the PDF menu on Mac) to "Save as PDF", then click Save.'
+    );
+    setTimeout(() => setPdfProgressMessage(null), 12000);
+    // Let the hint render before the print dialog blocks the page
+    setTimeout(() => window.print(), 50);
   };
 
   // AI Auto-Categorize Bulletin
@@ -459,7 +401,7 @@ export const PrintableBulletinBuilder: React.FC = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
+    <div className="max-w-7xl mx-auto px-4 py-6 space-y-6 print:p-0 print:max-w-none">
       {/* Top Banner: High-Volume 75 Requests Optimizer Bar */}
       <div className="bg-stone-900 text-stone-100 rounded-2xl p-5 shadow-md border border-stone-800 no-print space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
@@ -558,12 +500,11 @@ export const PrintableBulletinBuilder: React.FC = () => {
             {/* Direct Download PDF Button */}
             <button
               onClick={handleDownloadPDF}
-              disabled={isExportingPDF}
-              className="flex items-center gap-2 px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold shadow-md transition-all cursor-pointer disabled:opacity-60"
-              title="Save & Download this Sunday Bulletin directly as a PDF document"
+              className="flex items-center gap-2 px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold shadow-md transition-all cursor-pointer"
+              title="Save this Sunday Bulletin as a PDF file (choose &quot;Save as PDF&quot; in the print window)"
             >
-              <Download className={`w-4 h-4 ${isExportingPDF ? 'animate-bounce' : ''}`} />
-              <span>{isExportingPDF ? 'Generating PDF...' : 'Download PDF'}</span>
+              <Download className="w-4 h-4" />
+              <span>Save as PDF</span>
             </button>
 
             {/* Print Bulletin */}
@@ -582,7 +523,7 @@ export const PrintableBulletinBuilder: React.FC = () => {
         {pdfProgressMessage && (
           <div className="bg-blue-950/90 border border-blue-400/60 text-blue-200 text-xs px-3.5 py-2.5 rounded-xl flex items-center justify-between gap-2 shadow-xs">
             <div className="flex items-center gap-2">
-              <Download className="w-4 h-4 text-blue-300 animate-pulse shrink-0" />
+              <Download className="w-4 h-4 text-blue-300 shrink-0" />
               <span className="font-semibold">{pdfProgressMessage}</span>
             </div>
             <button
@@ -949,6 +890,28 @@ export const PrintableBulletinBuilder: React.FC = () => {
                 Inline Flow
               </button>
             </div>
+
+            <div className="flex items-center gap-1.5 pt-1 text-[11px]">
+              <span className="text-stone-500">Page:</span>
+              <button
+                onClick={() => setOrientation('portrait')}
+                className={`flex-1 py-1 text-center rounded border cursor-pointer ${
+                  orientation === 'portrait' ? 'bg-blue-700 text-white font-bold' : 'bg-stone-50 text-stone-600'
+                }`}
+                title="Portrait: 8.5 x 11 in, taller than wide"
+              >
+                ▯ Tall
+              </button>
+              <button
+                onClick={() => setOrientation('landscape')}
+                className={`flex-1 py-1 text-center rounded border cursor-pointer ${
+                  orientation === 'landscape' ? 'bg-blue-700 text-white font-bold' : 'bg-stone-50 text-stone-600'
+                }`}
+                title="Landscape: 11 x 8.5 in, wider than tall"
+              >
+                ▭ Wide
+              </button>
+            </div>
           </div>
 
           {/* Column 2: Font Size & Spacing */}
@@ -1106,13 +1069,20 @@ export const PrintableBulletinBuilder: React.FC = () => {
         </div>
       </div>
 
+      {/* Page orientation for Print / Save as PDF (overrides the default @page size) */}
+      <style>{`@media print { @page { size: letter ${orientation}; } }`}</style>
+
       {/* Live Printable Sheet Preview Container (Rendered exactly for print and screen) */}
-      <div className="bg-stone-300/40 p-2 sm:p-6 rounded-2xl flex justify-center no-print-bg">
+      <div className="bg-stone-300/40 p-2 sm:p-6 rounded-2xl flex justify-center no-print-bg print:p-0 print:bg-transparent print:block">
         <div
-          className={`printable-area bg-white text-stone-900 shadow-xl max-w-5xl w-full p-6 sm:p-10 transition-all border border-stone-200 ${
+          className={`printable-area bg-white text-stone-900 shadow-xl w-full p-4 sm:p-[0.5in] transition-all border border-stone-200 ${
             fontSizeClasses[fontSize]
           }`}
-          style={{ minHeight: '11in' }}
+          style={
+            orientation === 'landscape'
+              ? { maxWidth: '11in', minHeight: '8.5in' }
+              : { maxWidth: '8.5in', minHeight: '11in' }
+          }
         >
           {/* Sheet Header: Compact, Ink-friendly Header */}
           <div className="border-b-2 border-stone-900 pb-2.5 mb-3.5">
@@ -1122,6 +1092,7 @@ export const PrintableBulletinBuilder: React.FC = () => {
                   <img
                     src={currentChurch.logoUrl}
                     alt={currentChurch.name}
+                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
                     className="w-10 h-10 rounded object-cover shrink-0 border border-stone-300 print:filter print:grayscale"
                   />
                 )}
