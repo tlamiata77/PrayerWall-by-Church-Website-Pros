@@ -118,6 +118,9 @@ interface AppContextType {
   ) => void;
   updateBulletinSummary: (requestId: string, summary: string) => void;
   updateStaffNotes: (requestId: string, notes: string) => void;
+  /** Staff correction of any field on a request (e.g. one that imported wrong) */
+  updatePrayerRequest: (requestId: string, changes: Partial<PrayerRequest>) => void;
+  deletePrayerRequest: (requestId: string) => void;
   bulkUpdateBulletinSummaries: (updates: Array<{ id: string; ultraSummary: string }>) => void;
   togglePrayerAnswered: (requestId: string, updateNote?: string) => void;
   updateChurchProfile: (churchId: string, updates: Partial<Church>) => void;
@@ -892,6 +895,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     saveRequestChanges([{ id: requestId, patch: { staffNotes: notes } }], 'Saving care note');
   };
 
+  const updatePrayerRequest = (requestId: string, changes: Partial<PrayerRequest>) => {
+    const { id: _id, churchId: _church, userId: _user, ...editable } = changes;
+    saveRequestChanges([{ id: requestId, patch: editable }], 'Saving prayer request');
+  };
+
+  const deletePrayerRequest = (requestId: string) => {
+    setRequests((prev) => prev.filter((r) => r.id !== requestId));
+    supabase
+      .from('prayer_requests')
+      .delete()
+      .eq('id', requestId)
+      .then(({ error }) => {
+        if (error) {
+          reportError('Deleting prayer request', error);
+          refreshData();
+        }
+      });
+  };
+
   const togglePrayerAnswered = (requestId: string, updateNote?: string) => {
     const r = requests.find((x) => x.id === requestId);
     if (!r) return;
@@ -1289,6 +1311,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateRequestModeration,
         updateBulletinSummary,
         updateStaffNotes,
+        updatePrayerRequest,
+        deletePrayerRequest,
         bulkUpdateBulletinSummaries,
         togglePrayerAnswered,
         updateChurchProfile,
