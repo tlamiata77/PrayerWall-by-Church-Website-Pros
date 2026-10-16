@@ -257,6 +257,7 @@ export const AppNavigation: React.FC = () => {
 
             {/* User Account / Login Button */}
             {currentUser ? (
+              <div className="flex items-center gap-2">
               <div className="relative">
                 <button
                   onClick={() => setUserDropdownOpen(!userDropdownOpen)}
@@ -383,6 +384,20 @@ export const AppNavigation: React.FC = () => {
                     </div>
                   </div>
                 )}
+              </div>
+
+              {/* Always-visible sign out (also in the account menu) */}
+              <button
+                onClick={() => {
+                  setUserDropdownOpen(false);
+                  logout();
+                }}
+                className="flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-rose-50 text-rose-700 rounded-lg text-xs font-semibold border border-stone-300 hover:border-rose-300 transition-all cursor-pointer"
+                title="Sign out"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Sign out</span>
+              </button>
               </div>
             ) : (
               <button
