@@ -17,6 +17,7 @@ import { ChurchDirectory } from './components/ChurchDirectory';
 import { MemberPrayerHistory } from './components/MemberPrayerHistory';
 import { AuthModal } from './components/AuthModal';
 import { ImportPrayersModal } from './components/ImportPrayersModal';
+import { SetNewPasswordModal } from './components/SetNewPasswordModal';
 import { Heart, Sparkles, Shield, Printer, Globe, Code } from 'lucide-react';
 
 const MainContent: React.FC = () => {
@@ -70,6 +71,9 @@ const MainContent: React.FC = () => {
         onClose={closeLoginModal}
         defaultMode={loginModalInitialMode}
       />
+
+      {/* Shown after opening a password-reset email link */}
+      <SetNewPasswordModal />
 
       {/* CSV Batch Import Prayers Modal */}
       <ImportPrayersModal />
