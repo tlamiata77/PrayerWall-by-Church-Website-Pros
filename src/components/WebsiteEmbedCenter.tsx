@@ -238,10 +238,10 @@ export const WebsiteEmbedCenter: React.FC = () => {
               </div>
             </div>
 
-            {/* Embedded GraceWall Area */}
+            {/* Embedded PrayerKeeper Area */}
             <div className="bg-stone-50/70 p-2 sm:p-4">
               <div className="bg-amber-100/60 text-amber-900 text-[11px] font-medium p-2 text-center border-b border-amber-200/80 mb-2 rounded-t-xl">
-                🔌 GraceWall Embedded Widget Container (<code className="text-amber-950 font-bold">{currentChurch.name}</code>)
+                🔌 PrayerKeeper Embedded Widget Container (<code className="text-amber-950 font-bold">{currentChurch.name}</code>)
               </div>
               
               <PrayerWall forceSingleColumn={deviceView === 'mobile'} />
@@ -254,7 +254,7 @@ export const WebsiteEmbedCenter: React.FC = () => {
                 {currentChurch.address} • {currentChurch.phone} • {currentChurch.contactEmail}
               </p>
               <p className="text-[10px] text-stone-600 mt-3">
-                Powered by GraceWall from ChurchWebsitePros.com
+                Powered by PrayerKeeper from Church Website Pros
               </p>
             </div>
           </div>

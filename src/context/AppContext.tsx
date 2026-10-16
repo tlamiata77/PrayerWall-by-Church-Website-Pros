@@ -175,7 +175,7 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 const PLACEHOLDER_CHURCH: Church = {
   id: '',
   slug: '',
-  name: 'GraceWall',
+  name: 'PrayerKeeper',
   tagline: 'Church prayer walls by Church Website Pros',
   denomination: '',
   pastorName: '',

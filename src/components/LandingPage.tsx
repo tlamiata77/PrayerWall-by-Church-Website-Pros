@@ -90,7 +90,7 @@ const STEPS = [
 const FAQ = [
   {
     q: 'Is it really free?',
-    a: 'Yes. PrayerWall is free for every church right now, with no credit card and no limit on prayer requests or members.',
+    a: 'Yes. PrayerKeeper is free for every church right now, with no credit card and no limit on prayer requests or members.',
   },
   {
     q: 'Who can see our prayer requests?',
@@ -106,7 +106,7 @@ const FAQ = [
   },
 ];
 
-/** Public home page describing PrayerWall. The app itself lives at /app. */
+/** Public home page describing PrayerKeeper. The app itself lives at /app. */
 export const LandingPage: React.FC = () => {
   // People who are already signed in came here to use the app
   useEffect(() => {
@@ -126,7 +126,7 @@ export const LandingPage: React.FC = () => {
             </span>
             <span className="leading-tight min-w-0">
               <span className="block font-bold text-stone-900 truncate">Church Website Pros</span>
-              <span className="block text-[11px] text-stone-500 truncate">PrayerWall</span>
+              <span className="block text-[11px] text-stone-500 truncate">PrayerKeeper</span>
             </span>
           </a>
           <nav className="flex items-center gap-2 sm:gap-4 text-sm">
@@ -162,7 +162,7 @@ export const LandingPage: React.FC = () => {
               Bring your church together in prayer.
             </h1>
             <p className="mt-5 text-lg text-stone-600 leading-relaxed max-w-xl">
-              PrayerWall gives your congregation one caring place to share requests and pray for each other, and
+              PrayerKeeper gives your congregation one caring place to share requests and pray for each other, and
               gives your pastors simple tools to care for every need and print the Sunday prayer list.
             </p>
             <div className="mt-8 flex flex-col sm:flex-row gap-3">
@@ -257,7 +257,7 @@ export const LandingPage: React.FC = () => {
               The prayer list prints itself.
             </h2>
             <p className="mt-4 text-stone-300 text-lg leading-relaxed">
-              No more retyping requests into a Word document every Saturday night. PrayerWall organizes the week’s
+              No more retyping requests into a Word document every Saturday night. PrayerKeeper organizes the week’s
               needs by category and prints a clean, readable sheet for your bulletin or prayer meeting.
             </p>
             <ul className="mt-6 space-y-2.5 text-stone-200">
@@ -420,7 +420,7 @@ export const LandingPage: React.FC = () => {
         <div className="max-w-6xl mx-auto px-4 py-8 flex flex-col sm:flex-row items-center justify-between gap-3">
           <a href={CWP_URL} className="flex items-center gap-2 text-stone-200 font-semibold">
             <Sparkles className="w-4 h-4 text-amber-400" />
-            PrayerWall by Church Website Pros
+            PrayerKeeper by Church Website Pros
           </a>
           <div className="flex items-center gap-5">
             <a href={APP_URL} className="hover:text-white">

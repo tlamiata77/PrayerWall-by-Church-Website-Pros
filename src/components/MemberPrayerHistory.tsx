@@ -68,7 +68,7 @@ export const MemberPrayerHistory: React.FC = () => {
 
           <div className="border-t border-stone-100 pt-6">
             <p className="text-xs text-stone-400">
-              GraceWall protects church member privacy. Only you and authorized pastoral staff can see your personal submission record.
+              PrayerKeeper protects church member privacy. Only you and authorized pastoral staff can see your personal submission record.
             </p>
           </div>
         </div>

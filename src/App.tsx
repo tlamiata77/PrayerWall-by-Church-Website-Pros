@@ -113,7 +113,7 @@ export default function App() {
           <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-2">
               <span className="font-serif-church font-bold text-stone-800 text-sm">
-                GraceWall
+                PrayerKeeper
               </span>
               <span>by Church Website Pros</span>
               <span className="text-stone-300">•</span>

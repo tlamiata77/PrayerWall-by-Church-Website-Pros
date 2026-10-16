@@ -73,13 +73,13 @@ export const AppNavigation: React.FC = () => {
       <div className="bg-stone-900 text-stone-300 text-xs px-4 py-2 border-b border-stone-800">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <a href="/" className="flex items-center gap-1.5 font-semibold text-stone-100 tracking-wide hover:text-white" title="PrayerWall home">
+            <a href="/" className="flex items-center gap-1.5 font-semibold text-stone-100 tracking-wide hover:text-white" title="PrayerKeeper home">
               <Sparkles className="w-3.5 h-3.5 text-amber-400" />
               Church Website Pros
             </a>
             <span className="text-stone-500">•</span>
             <span className="text-stone-400 hidden sm:inline">
-              GraceWall Multi-Tenant Church Prayer & Directory Suite
+              PrayerKeeper by Church Website Pros
             </span>
           </div>
 
@@ -152,7 +152,7 @@ export const AppNavigation: React.FC = () => {
                     ? 'bg-amber-500 text-stone-950 font-bold shadow-xs'
                     : 'text-stone-300 hover:text-white hover:bg-stone-700/50'
                 }`}
-                title="Simulate how GraceWall looks embedded on a client church website"
+                title="Simulate how PrayerKeeper looks embedded on a client church website"
               >
                 <Code className="w-3.5 h-3.5" />
                 <span className="font-medium">Embed Simulator</span>

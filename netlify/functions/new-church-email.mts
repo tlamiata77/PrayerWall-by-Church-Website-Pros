@@ -10,7 +10,7 @@
  */
 
 const DEFAULT_TO = 'tessa@churchwebsitepros.com';
-const DEFAULT_FROM = 'GraceWall <team@prayers.churchwebsitepros.com>';
+const DEFAULT_FROM = 'PrayerKeeper <team@prayers.churchwebsitepros.com>';
 
 interface WebhookPayload {
   type?: string;
@@ -50,7 +50,7 @@ export default async (req: Request): Promise<Response> => {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) return new Response('RESEND_API_KEY is not set', { status: 500 });
 
-  const message = record.message || 'A new church registered on GraceWall.';
+  const message = record.message || 'A new church registered on PrayerKeeper.';
   const siteUrl = process.env.URL || '';
   const when = record.created_at ? new Date(record.created_at).toUTCString() : new Date().toUTCString();
 
@@ -60,7 +60,7 @@ export default async (req: Request): Promise<Response> => {
     body: JSON.stringify({
       from: process.env.EMAIL_FROM || DEFAULT_FROM,
       to: [process.env.NOTIFY_EMAIL || DEFAULT_TO],
-      subject: 'New church registered on GraceWall',
+      subject: 'New church registered on PrayerKeeper',
       text: `${message}\n\nRegistered: ${when}\n${siteUrl ? `\nReview it in the Super Admin Portal: ${siteUrl}\n` : ''}`,
       html: `<p>${escapeHtml(message)}</p><p style="color:#666">Registered: ${escapeHtml(when)}</p>${
         siteUrl ? `<p><a href="${escapeHtml(siteUrl)}">Open the Super Admin Portal</a></p>` : ''
