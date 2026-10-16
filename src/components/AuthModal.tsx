@@ -259,7 +259,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <div>
             <div className="flex items-center gap-2 mb-1">
               <span className="bg-amber-500/20 text-amber-400 text-[11px] font-semibold tracking-wider uppercase px-2 py-0.5 rounded-full border border-amber-500/30">
-                GraceWall Identity
+                PrayerKeeper Identity
               </span>
               <span className="text-stone-400 text-xs">•</span>
               <span className="text-stone-300 text-xs">Pastoral & Member Accounts</span>
@@ -429,8 +429,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </span>
               </div>
               <ol className="list-decimal pl-5 space-y-1 text-xs text-stone-600">
-                <li>Open the email from GraceWall (check spam if it's not there in a minute).</li>
-                <li>Click the link. GraceWall opens in a new tab.</li>
+                <li>Open the email from PrayerKeeper (check spam if it's not there in a minute).</li>
+                <li>Click the link. PrayerKeeper opens in a new tab.</li>
                 <li>Choose your new password there. You'll be signed in.</li>
               </ol>
               <p className="text-xs text-stone-500">You can close this window.</p>

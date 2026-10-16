@@ -896,7 +896,7 @@ export const ImportPrayersModal: React.FC = () => {
                       <div className="flex items-center gap-2">
                         <Sliders className="w-5 h-5 text-amber-700" />
                         <h4 className="font-bold text-stone-900 text-sm">
-                          Match Your Spreadsheet Columns to GraceWall Fields
+                          Match Your Spreadsheet Columns to PrayerKeeper Fields
                         </h4>
                       </div>
                       <p className="text-xs text-stone-600">

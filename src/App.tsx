@@ -35,6 +35,18 @@ const MainContent: React.FC = () => {
   const isPastorOrStaff = activeRole === 'church_staff' || activeRole === 'super_admin';
   const isEmbedSimulator = activeRole === 'embed_view';
 
+  const { openLoginModal } = useApp();
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('register') === 'church') {
+      openLoginModal(undefined, 'register_church');
+      params.delete('register');
+      const rest = params.toString();
+      window.history.replaceState(null, '', window.location.pathname + (rest ? `?${rest}` : '') + window.location.hash);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <main className="min-h-screen pb-16">
       {dataError && (
@@ -101,7 +113,7 @@ export default function App() {
           <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-2">
               <span className="font-serif-church font-bold text-stone-800 text-sm">
-                GraceWall
+                PrayerKeeper
               </span>
               <span>by Church Website Pros</span>
               <span className="text-stone-300">•</span>

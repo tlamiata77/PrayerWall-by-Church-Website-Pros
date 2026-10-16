@@ -1,1 +1,6 @@
+# Netlify never redirects its own *.netlify.app address to the primary domain,
+# so send old links to prayers.churchwebsitepros.com (path and query are kept)
+https://prayerwallapp.netlify.app/*  https://prayers.churchwebsitepros.com/:splat  301!
+
+# Single-page app: every other path is served by index.html
 /*    /index.html   200

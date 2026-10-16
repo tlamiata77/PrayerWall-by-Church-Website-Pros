@@ -91,7 +91,7 @@ export const SuperAdminPanel: React.FC = () => {
           Move Data Saved in This Browser
         </h3>
         <p className="text-xs text-stone-600 leading-relaxed">
-          The earlier version of GraceWall saved churches and prayers only inside the browser you used. Open this page
+          The earlier version of PrayerKeeper saved churches and prayers only inside the browser you used. Open this page
           on that same computer and browser, then move the data into the database so it saves for everyone.
         </p>
 
