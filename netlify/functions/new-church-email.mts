@@ -10,7 +10,7 @@
  */
 
 const DEFAULT_TO = 'tessa@churchwebsitepros.com';
-const DEFAULT_FROM = 'GraceWall <team@prayerwall.churchwebsitepros.com>';
+const DEFAULT_FROM = 'GraceWall <team@prayers.churchwebsitepros.com>';
 
 interface WebhookPayload {
   type?: string;
