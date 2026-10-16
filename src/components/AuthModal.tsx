@@ -45,12 +45,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   const [mode, setMode] = useState<'login' | 'register' | 'register_church' | 'forgot'>(defaultMode);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [resetSentTo, setResetSentTo] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen) {
       setMode(defaultMode);
       setError(null);
       setSuccessMsg(null);
+      setResetSentTo(null);
       setSelectedChurchId(currentChurchId);
     }
     // Reset only when the window opens; signing up can switch churches while it shows a message
@@ -82,6 +84,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  // Finishing the reset in another tab of this browser signs this tab in too
+  useEffect(() => {
+    if (isOpen && resetSentTo && currentUser) onClose();
+  }, [isOpen, resetSentTo, currentUser, onClose]);
 
   if (!isOpen) return null;
 
@@ -118,7 +125,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     const res = await sendPasswordReset(email);
     setIsSubmitting(false);
     if (res.success) {
-      setSuccessMsg('Check your email for a link to set a new password.');
+      setResetSentTo(email.trim());
     } else {
       setError(res.error || 'Could not send the reset email');
     }
@@ -263,6 +270,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             <p className="text-xs text-stone-300 mt-1 max-w-sm">
               {mode === 'login'
                 ? 'Access your submitted prayers, renew requests, or enter staff administration.'
+                : mode === 'forgot'
+                ? "We'll email you a link to choose a new password."
                 : 'Join your church prayer community with member or pastoral privileges.'}
             </p>
           </div>
@@ -411,6 +420,37 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </p>
               </div>
             </form>
+          ) : mode === 'forgot' && resetSentTo ? (
+            <div className="space-y-4 text-sm text-stone-700">
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-start gap-2.5 text-emerald-800">
+                <CheckCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>
+                  We sent a reset link to <strong>{resetSentTo}</strong>.
+                </span>
+              </div>
+              <ol className="list-decimal pl-5 space-y-1 text-xs text-stone-600">
+                <li>Open the email from GraceWall (check spam if it's not there in a minute).</li>
+                <li>Click the link. GraceWall opens in a new tab.</li>
+                <li>Choose your new password there. You'll be signed in.</li>
+              </ol>
+              <p className="text-xs text-stone-500">You can close this window.</p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="flex-1 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-lg text-sm cursor-pointer"
+                >
+                  Close
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setResetSentTo(null)}
+                  className="px-3 py-2.5 text-xs text-stone-500 hover:text-stone-800 cursor-pointer"
+                >
+                  Send again
+                </button>
+              </div>
+            </div>
           ) : mode === 'forgot' ? (
             <form onSubmit={handleForgot} className="space-y-4">
               <p className="text-xs text-stone-600">
