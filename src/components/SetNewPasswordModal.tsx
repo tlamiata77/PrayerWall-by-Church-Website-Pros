@@ -51,7 +51,7 @@ export const SetNewPasswordModal: React.FC = () => {
           {done ? (
             <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-2 text-sm text-emerald-800">
               <CheckCircle className="w-4 h-4 shrink-0" />
-              Your password is updated. You're signed in.
+              Your password is updated and you're signed in. Use the new password next time you sign in.
             </div>
           ) : (
             <>
