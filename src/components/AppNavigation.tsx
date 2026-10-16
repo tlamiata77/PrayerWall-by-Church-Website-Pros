@@ -73,10 +73,10 @@ export const AppNavigation: React.FC = () => {
       <div className="bg-stone-900 text-stone-300 text-xs px-4 py-2 border-b border-stone-800">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <span className="flex items-center gap-1.5 font-semibold text-stone-100 tracking-wide">
+            <a href="/" className="flex items-center gap-1.5 font-semibold text-stone-100 tracking-wide hover:text-white" title="PrayerWall home">
               <Sparkles className="w-3.5 h-3.5 text-amber-400" />
               Church Website Pros
-            </span>
+            </a>
             <span className="text-stone-500">•</span>
             <span className="text-stone-400 hidden sm:inline">
               GraceWall Multi-Tenant Church Prayer & Directory Suite

@@ -35,6 +35,18 @@ const MainContent: React.FC = () => {
   const isPastorOrStaff = activeRole === 'church_staff' || activeRole === 'super_admin';
   const isEmbedSimulator = activeRole === 'embed_view';
 
+  const { openLoginModal } = useApp();
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('register') === 'church') {
+      openLoginModal(undefined, 'register_church');
+      params.delete('register');
+      const rest = params.toString();
+      window.history.replaceState(null, '', window.location.pathname + (rest ? `?${rest}` : '') + window.location.hash);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <main className="min-h-screen pb-16">
       {dataError && (

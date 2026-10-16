@@ -534,7 +534,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       email: data.email.trim(),
       password: data.password,
       options: {
-        emailRedirectTo: window.location.origin,
+        emailRedirectTo: `${window.location.origin}/app`,
         data: {
           name: data.name.trim(),
           phone: data.phone?.trim() || '',
@@ -573,7 +573,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       email: email.trim(),
       password,
       options: {
-        emailRedirectTo: window.location.origin,
+        emailRedirectTo: `${window.location.origin}/app`,
         data: {
           name: church.pastorName,
           phone: church.phone || '',
@@ -598,7 +598,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const sendPasswordReset = async (email: string): Promise<AuthResult> => {
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: `${window.location.origin}/?reset=1`,
+      redirectTo: `${window.location.origin}/app?reset=1`,
     });
     if (error) return { success: false, error: friendlyAuthError(error.message) };
     return { success: true };
