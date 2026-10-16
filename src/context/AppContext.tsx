@@ -13,6 +13,7 @@ import {
   directoryFromRow,
   directoryToRow,
   newId,
+  openedFromPasswordReset,
 } from '../lib/supabase';
 
 export type MemberAccount = UserAccount & { approved: boolean };
@@ -90,6 +91,10 @@ interface AppContextType {
   }) => Promise<AuthResult>;
   registerChurch: (input: RegisterChurchInput) => Promise<AuthResult & { churchId?: string }>;
   sendPasswordReset: (email: string) => Promise<AuthResult>;
+  /** True after opening a password-reset email link, until a new password is saved */
+  isPasswordRecovery: boolean;
+  updatePassword: (password: string) => Promise<AuthResult>;
+  finishPasswordRecovery: () => void;
   approveMember: (userId: string) => Promise<void>;
   setMemberRole: (userId: string, role: 'church_staff' | 'congregation_member') => Promise<void>;
   revokeMember: (userId: string) => Promise<void>;
@@ -252,12 +257,15 @@ const friendlyAuthError = (message: string): string => {
   if (m.includes('already registered')) return 'An account with this email already exists. Sign in instead.';
   if (m.includes('password should be')) return 'Please choose a password of at least 6 characters.';
   if (m.includes('rate limit')) return 'Too many attempts. Please wait a minute and try again.';
+  if (m.includes('different from the old')) return 'Please choose a password different from your current one.';
+  if (m.includes('session missing') || m.includes('expired')) return 'This reset link has expired. Use "Forgot password?" to get a new one.';
   return message;
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [authReady, setAuthReady] = useState(false);
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(openedFromPasswordReset);
   const [isLoading, setIsLoading] = useState(true);
   const [dataError, setDataError] = useState<string | null>(null);
 
@@ -377,6 +385,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const { data: sub } = supabase.auth.onAuthStateChange((event, newSession) => {
       // Token refreshes keep the same user; no need to reload everything
       if (event === 'TOKEN_REFRESHED') return;
+      if (event === 'PASSWORD_RECOVERY') setIsPasswordRecovery(true);
       setSession(newSession);
       setAuthReady(true);
     });
@@ -589,10 +598,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const sendPasswordReset = async (email: string): Promise<AuthResult> => {
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: window.location.origin,
+      redirectTo: `${window.location.origin}/?reset=1`,
     });
     if (error) return { success: false, error: friendlyAuthError(error.message) };
     return { success: true };
+  };
+
+  const updatePassword = async (password: string): Promise<AuthResult> => {
+    const { error } = await supabase.auth.updateUser({ password });
+    if (error) return { success: false, error: friendlyAuthError(error.message) };
+    return { success: true };
+  };
+
+  const finishPasswordRecovery = () => {
+    setIsPasswordRecovery(false);
+    // Drop ?reset=1 so a refresh doesn't ask again
+    const url = new URL(window.location.href);
+    url.searchParams.delete('reset');
+    window.history.replaceState(null, '', url.pathname + url.search + url.hash);
   };
 
   const openLoginModal = (_redirectTab?: AppTab, mode: 'login' | 'register' | 'register_church' = 'login') => {
@@ -1297,6 +1320,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         register,
         registerChurch,
         sendPasswordReset,
+        isPasswordRecovery,
+        updatePassword,
+        finishPasswordRecovery,
         approveMember,
         setMemberRole,
         revokeMember,

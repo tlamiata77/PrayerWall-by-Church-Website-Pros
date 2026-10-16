@@ -7,6 +7,11 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://jkkbgazlcjsnz
 const SUPABASE_PUBLISHABLE_KEY =
   import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_DzZa8Bg7DuTraOICuPv3XA_8BFuhU-m';
 
+// Read before createClient: the client removes the reset link's details from the address bar
+export const openedFromPasswordReset =
+  typeof window !== 'undefined' &&
+  (/type=recovery/.test(window.location.hash) || new URLSearchParams(window.location.search).get('reset') === '1');
+
 export const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
