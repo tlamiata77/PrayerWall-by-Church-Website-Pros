@@ -85,8 +85,8 @@ export const WebsiteEmbedCenter: React.FC = () => {
                   className="text-purple-600"
                 />
                 <div>
-                  <span className="font-bold text-stone-800 block">Full Prayer Wall + Submit CTA</span>
-                  <span className="text-[11px] text-stone-500">Includes church header, prayer cards, and submission modal.</span>
+                  <span className="font-bold text-stone-800 block">Prayer Wall + Share Button</span>
+                  <span className="text-[11px] text-stone-500">A "Share a Prayer Request" button plus your prayer cards.</span>
                 </div>
               </label>
 
@@ -100,7 +100,7 @@ export const WebsiteEmbedCenter: React.FC = () => {
                 />
                 <div>
                   <span className="font-bold text-stone-800 block">Prayer Wall Only</span>
-                  <span className="text-[11px] text-stone-500">Displays active requests with prayer counter.</span>
+                  <span className="text-[11px] text-stone-500">Just your prayer cards with the "I prayed" counter.</span>
                 </div>
               </label>
             </div>
@@ -244,7 +244,7 @@ export const WebsiteEmbedCenter: React.FC = () => {
                 🔌 PrayerKeeper Embedded Widget Container (<code className="text-amber-950 font-bold">{currentChurch.name}</code>)
               </div>
               
-              <PrayerWall forceSingleColumn={deviceView === 'mobile'} />
+              <PrayerWall forceSingleColumn={deviceView === 'mobile'} hideChurchBanner />
             </div>
 
             {/* Simulated Church Website Footer */}

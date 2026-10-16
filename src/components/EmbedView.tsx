@@ -7,7 +7,8 @@ import { PlusCircle } from 'lucide-react';
 
 /**
  * What a church's website shows in its iframe (/embed/<slug>?mode=full|wall_only):
- * just that church's prayer wall, without the app's navigation, church switcher or banners.
+ * just that church's prayers (plus a share button in "full" mode). The church's own
+ * website already shows its name, so the app header and church card are left out.
  */
 export const EmbedView: React.FC = () => {
   const { setActiveRole, isLoading, currentChurch, setSubmitModalOpen } = useApp();
@@ -43,7 +44,7 @@ export const EmbedView: React.FC = () => {
         </div>
       )}
 
-      <PrayerWall hideChurchBanner={mode === 'wall_only'} />
+      <PrayerWall hideChurchBanner />
 
       <div className="pb-6 text-center text-[11px] text-stone-400">
         <a href={window.location.origin} target="_blank" rel="noopener noreferrer" className="hover:text-stone-600">
