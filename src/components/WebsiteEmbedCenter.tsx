@@ -86,7 +86,7 @@ export const WebsiteEmbedCenter: React.FC = () => {
                 />
                 <div>
                   <span className="font-bold text-stone-800 block">Prayer Wall + Share Button</span>
-                  <span className="text-[11px] text-stone-500">A "Share a Prayer Request" button plus your prayer cards.</span>
+                  <span className="text-[11px] text-stone-500">"Share a Prayer Request" and "This Week's Prayer List" buttons, plus your prayer cards.</span>
                 </div>
               </label>
 
@@ -100,7 +100,7 @@ export const WebsiteEmbedCenter: React.FC = () => {
                 />
                 <div>
                   <span className="font-bold text-stone-800 block">Prayer Wall Only</span>
-                  <span className="text-[11px] text-stone-500">Just your prayer cards with the "I prayed" counter.</span>
+                  <span className="text-[11px] text-stone-500">Your prayer cards with the "I prayed" counter, plus a "This Week's Prayer List" button.</span>
                 </div>
               </label>
             </div>
