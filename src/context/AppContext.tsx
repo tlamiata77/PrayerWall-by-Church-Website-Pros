@@ -201,6 +201,7 @@ const PLACEHOLDER_CHURCH: Church = {
 };
 
 // Per-viewer conveniences only; all real data lives in Supabase
+export const DEMO_CHURCH_SLUG = 'demo';
 const LAST_CHURCH_KEY = 'gracewall_last_church';
 const PRAYED_KEY = 'gracewall_prayed_ids';
 
@@ -364,7 +365,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (urlChurch) return urlChurch.id;
         if (prev && churchesById.has(prev)) return prev;
         if (me?.churchId && churchesById.has(me.churchId)) return me.churchId;
-        return loadedChurches[0]?.id || '';
+        // Visitors without a church of their own see the demo church, not a real one
+        return loadedChurches.find((c) => c.slug === DEMO_CHURCH_SLUG)?.id || loadedChurches[0]?.id || '';
       });
     } catch (e) {
       reportError('Loading prayer data', e);

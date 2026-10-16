@@ -15,4 +15,8 @@ const isApp =
   /access_token|type=recovery|error_description/.test(hash) ||
   params.has('code');
 
-createRoot(document.getElementById('root')!).render(isApp ? <App /> : <LandingPage />);
+const isEmbed = pathname.startsWith('/embed/');
+
+createRoot(document.getElementById('root')!).render(
+  isEmbed ? <App embed /> : isApp ? <App /> : <LandingPage />
+);

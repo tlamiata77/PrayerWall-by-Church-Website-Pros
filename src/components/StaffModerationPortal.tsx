@@ -247,7 +247,7 @@ export const StaffModerationPortal: React.FC = () => {
         </div>
 
         {/* Actions & Sub-tab navigation */}
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap min-w-0 max-w-full">
           <button
             onClick={() => setImportModalOpen(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-lg text-xs font-bold transition-all shadow-2xs cursor-pointer"
@@ -257,7 +257,7 @@ export const StaffModerationPortal: React.FC = () => {
             <span>Import CSV into {currentChurch.name}</span>
           </button>
 
-          <div className="flex items-center gap-1.5 text-xs bg-stone-100 p-1 rounded-xl">
+          <div className="flex items-center gap-1.5 text-xs bg-stone-100 p-1 rounded-xl max-w-full overflow-x-auto">
           {activeRole === 'super_admin' && (
             <button
               onClick={() => setActiveSubTab('super_admin')}

@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 
 const APP_URL = '/app';
+const DEMO_URL = '/app?church=demo';
 const REGISTER_URL = '/app?register=church';
 const CWP_URL = 'https://churchwebsitepros.com';
 
@@ -171,10 +172,10 @@ export const LandingPage: React.FC = () => {
                 Register your church free
               </a>
               <a
-                href={APP_URL}
+                href={DEMO_URL}
                 className="inline-flex items-center justify-center gap-2 bg-white hover:bg-stone-100 text-[#1d1e33] font-semibold px-6 py-3 rounded-full border-2 border-[#1d1e33]"
               >
-                See a prayer wall
+                See a demo prayer wall
                 <ArrowRight className="w-4 h-4" />
               </a>
             </div>
@@ -190,7 +191,7 @@ export const LandingPage: React.FC = () => {
                   <ChurchIcon className="w-5 h-5" />
                 </span>
                 <div>
-                  <div className="font-serif-church font-bold text-stone-900">Grace Community Prayer Wall</div>
+                  <div className="font-serif-church font-bold text-stone-900">Riverside Community Prayer Wall</div>
                   <div className="text-xs text-stone-500">38 active needs · 212 prayers this week</div>
                 </div>
               </div>
