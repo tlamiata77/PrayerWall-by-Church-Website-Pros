@@ -18,6 +18,7 @@ import { MemberPrayerHistory } from './components/MemberPrayerHistory';
 import { AuthModal } from './components/AuthModal';
 import { ImportPrayersModal } from './components/ImportPrayersModal';
 import { SetNewPasswordModal } from './components/SetNewPasswordModal';
+import { EmbedView } from './components/EmbedView';
 import { Heart, Sparkles, Shield, Printer, Globe, Code } from 'lucide-react';
 
 const MainContent: React.FC = () => {
@@ -31,6 +32,7 @@ const MainContent: React.FC = () => {
     dataError,
     clearDataError,
     currentChurch,
+    currentUser,
   } = useApp();
 
   const isPastorOrStaff = activeRole === 'church_staff' || activeRole === 'super_admin';
@@ -61,7 +63,7 @@ const MainContent: React.FC = () => {
         </div>
       )}
 
-      {!isLoading && currentChurch.slug === DEMO_CHURCH_SLUG && (
+      {!isLoading && !currentUser && currentChurch.slug === DEMO_CHURCH_SLUG && (
         <div className="max-w-7xl mx-auto px-4 pt-4 no-print">
           <div className="bg-[#43b1a4]/10 border border-[#43b1a4]/40 text-stone-800 text-sm rounded-xl px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <span>
@@ -111,7 +113,15 @@ const MainContent: React.FC = () => {
   );
 };
 
-export default function App() {
+export default function App({ embed = false }: { embed?: boolean }) {
+  if (embed) {
+    return (
+      <AppProvider>
+        <EmbedView />
+      </AppProvider>
+    );
+  }
+
   return (
     <AppProvider>
       <div className="min-h-screen bg-stone-100/70 text-stone-900 flex flex-col justify-between selection:bg-amber-100 selection:text-amber-900">

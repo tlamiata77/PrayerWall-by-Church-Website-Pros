@@ -51,9 +51,11 @@ const CATEGORIES: RequestCategory[] = [
 interface PrayerWallProps {
   forceSingleColumn?: boolean;
   overrideLayout?: WallLayoutType;
+  /** Leave out the church name / scripture card (website embed "wall only") */
+  hideChurchBanner?: boolean;
 }
 
-export const PrayerWall: React.FC<PrayerWallProps> = ({ forceSingleColumn = false, overrideLayout }) => {
+export const PrayerWall: React.FC<PrayerWallProps> = ({ forceSingleColumn = false, overrideLayout, hideChurchBanner = false }) => {
   const {
     currentChurch,
     filteredChurchRequests,
@@ -183,6 +185,7 @@ export const PrayerWall: React.FC<PrayerWallProps> = ({ forceSingleColumn = fals
       )}
 
       {/* Church Banner & Scripture Card */}
+      {!hideChurchBanner && (
       <div
         className="rounded-2xl p-6 sm:p-8 shadow-xs border relative overflow-hidden bg-white"
         style={{
@@ -334,6 +337,7 @@ export const PrayerWall: React.FC<PrayerWallProps> = ({ forceSingleColumn = fals
           </div>
         </div>
       </div>
+      )}
 
       {/* Filter and Search Bar */}
       <div className="bg-white rounded-xl p-4 shadow-xs border border-stone-200/80 space-y-3">
@@ -787,7 +791,7 @@ export const PrayerWall: React.FC<PrayerWallProps> = ({ forceSingleColumn = fals
 
                     {/* Staff Quick Actions */}
                     {(activeRole === 'church_staff' || activeRole === 'super_admin') && (
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <button
                           onClick={() => setEditingRequest(req)}
                           className="text-xs px-2.5 py-1.5 rounded-md font-medium transition-colors cursor-pointer flex items-center gap-1 text-stone-600 hover:text-stone-900 hover:bg-stone-100 border border-stone-200"
