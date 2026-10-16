@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { AppProvider, useApp } from './context/AppContext';
+import { AppProvider, useApp, DEMO_CHURCH_SLUG } from './context/AppContext';
 import { ImpersonationBanner } from './components/ImpersonationBanner';
 import { AppNavigation } from './components/AppNavigation';
 import { PrayerWall } from './components/PrayerWall';
@@ -30,6 +30,7 @@ const MainContent: React.FC = () => {
     isLoading,
     dataError,
     clearDataError,
+    currentChurch,
   } = useApp();
 
   const isPastorOrStaff = activeRole === 'church_staff' || activeRole === 'super_admin';
@@ -55,6 +56,23 @@ const MainContent: React.FC = () => {
             <span>{dataError}</span>
             <button onClick={clearDataError} className="font-bold cursor-pointer" aria-label="Dismiss">
               ✕
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!isLoading && currentChurch.slug === DEMO_CHURCH_SLUG && (
+        <div className="max-w-7xl mx-auto px-4 pt-4 no-print">
+          <div className="bg-[#43b1a4]/10 border border-[#43b1a4]/40 text-stone-800 text-sm rounded-xl px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <span>
+              <strong>You're viewing a demo.</strong> Riverside Community Church is a sample prayer wall with
+              made-up names, so you can see how PrayerKeeper works.
+            </span>
+            <button
+              onClick={() => openLoginModal(undefined, 'register_church')}
+              className="shrink-0 bg-[#d312b4] hover:bg-[#b80f9c] text-white font-semibold px-4 py-2 rounded-full text-xs cursor-pointer"
+            >
+              Register your church free
             </button>
           </div>
         </div>
