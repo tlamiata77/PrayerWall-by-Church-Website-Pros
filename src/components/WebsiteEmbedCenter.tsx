@@ -22,7 +22,7 @@ export const WebsiteEmbedCenter: React.FC = () => {
   const [embedMode, setEmbedMode] = useState<'full' | 'wall_only' | 'button_only'>('full');
   const [copied, setCopied] = useState(false);
 
-  const embedUrl = `https://gracewall.churchwebsitepros.com/embed/${currentChurch.slug}?mode=${embedMode}&theme=${currentChurch.themeColor}`;
+  const embedUrl = `${window.location.origin}/embed/${currentChurch.slug}?mode=${embedMode}&theme=${currentChurch.themeColor}`;
   const iframeSnippet = `<iframe\n  src="${embedUrl}"\n  width="100%"\n  height="780"\n  frameborder="0"\n  style="border: none; border-radius: 16px; width: 100%; min-height: 780px;"\n  title="${currentChurch.name} Community Prayer Wall"\n></iframe>`;
 
   const handleCopy = () => {
