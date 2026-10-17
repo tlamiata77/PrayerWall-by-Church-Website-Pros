@@ -68,7 +68,7 @@ export const AppNavigation: React.FC = () => {
   const userSubmissionsCount = currentUser ? requests.filter((r) => r.userId === currentUser.id).length : 0;
 
   return (
-    <header className="bg-white border-b border-stone-200 sticky top-0 z-40 shadow-xs no-print">
+    <header className="bg-white border-b border-stone-200 sm:sticky sm:top-0 z-40 shadow-xs no-print">
       {/* Top Meta Bar: Church Website Pros Branding & Persona Switcher */}
       <div className="bg-stone-900 text-stone-300 text-xs px-4 py-2 border-b border-stone-800">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
@@ -167,7 +167,7 @@ export const AppNavigation: React.FC = () => {
       <div className="max-w-7xl mx-auto px-4 py-3">
         <div className="flex flex-wrap items-center justify-between gap-4">
           {/* Church Branding & Selector */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 min-w-0 max-w-full">
             {currentChurch.logoUrl ? (
               <img
                 src={currentChurch.logoUrl}
@@ -183,9 +183,9 @@ export const AppNavigation: React.FC = () => {
               </div>
             )}
 
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="font-serif-church text-xl font-bold text-stone-900 tracking-tight">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap min-w-0">
+                <h1 className="font-serif-church text-lg sm:text-xl font-bold text-stone-900 tracking-tight break-words min-w-0">
                   {currentChurch.name}
                 </h1>
 
@@ -195,7 +195,7 @@ export const AppNavigation: React.FC = () => {
                   <select
                     value={currentChurchId}
                     onChange={(e) => setCurrentChurchId(e.target.value)}
-                    className="appearance-none bg-stone-100 hover:bg-stone-200/80 text-stone-700 text-xs font-semibold rounded-md pl-2 pr-6 py-1 border border-stone-300/80 cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#4eb8b9]"
+                    className="max-w-[220px] sm:max-w-xs truncate appearance-none bg-stone-100 hover:bg-stone-200/80 text-stone-700 text-xs font-semibold rounded-md pl-2 pr-6 py-1 border border-stone-300/80 cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#4eb8b9]"
                     title="Switch church"
                   >
                     {churches.map((church) => (
