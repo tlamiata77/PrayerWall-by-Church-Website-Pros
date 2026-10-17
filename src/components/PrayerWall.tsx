@@ -594,11 +594,8 @@ export const PrayerWall: React.FC<PrayerWallProps> = ({ forceSingleColumn = fals
                         e.stopPropagation();
                         handlePray(req);
                       }}
-                      className={`flex items-center gap-1 px-2.5 py-1.5 rounded-full border text-[13px] font-bold transition-all active:scale-95 cursor-pointer ${
-                        req.prayedByMe
-                          ? 'bg-amber-100 border-amber-400 text-amber-900'
-                          : 'bg-[#fff8e6] border-[#f2d47a] text-[#8a4b0c] hover:bg-amber-100'
-                      }`}
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-full border bg-stone-50 border-stone-200 hover:bg-stone-100 text-[13px] font-bold transition-all active:scale-95 cursor-pointer"
+                      style={{ color: currentTheme.primary, ...(req.prayedByMe ? { borderColor: `${currentTheme.primary}80` } : {}) }}
                       title="I prayed for this"
                       aria-label={`I prayed for this (${req.prayerCount} prayers)`}
                     >
@@ -611,7 +608,8 @@ export const PrayerWall: React.FC<PrayerWallProps> = ({ forceSingleColumn = fals
                         e.stopPropagation();
                         openCard(req.id, true);
                       }}
-                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-full border border-[#bfe3de] bg-[#eef8f6] text-[#2f8f84] text-[13px] font-bold transition-all active:scale-95 hover:bg-[#dff2ef] cursor-pointer"
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-full border bg-stone-50 border-stone-200 hover:bg-stone-100 text-[13px] font-bold transition-all active:scale-95 cursor-pointer"
+                      style={{ color: currentTheme.primary }}
                       title="Send encouragement"
                       aria-label="Send encouragement"
                     >
@@ -746,16 +744,18 @@ export const PrayerWall: React.FC<PrayerWallProps> = ({ forceSingleColumn = fals
                     <button
                       type="button"
                       onClick={() => handlePray(req)}
-                      className="flex items-center gap-2 bg-[#fff8e6] hover:bg-amber-100 text-[#8a4b0c] px-3.5 py-2 rounded-full text-sm font-bold transition-all cursor-pointer border border-[#f2d47a] active:scale-95"
+                      className="flex items-center gap-2 bg-stone-50 hover:bg-stone-100 px-3.5 py-2 rounded-full text-sm font-bold transition-all cursor-pointer border border-stone-200 active:scale-95"
+                      style={{ color: currentTheme.primary }}
                     >
                       <PrayingHands className="w-4 h-4" />
                       <span>{req.prayedByMe ? 'I prayed again' : 'I prayed'}</span>
-                      <span className="bg-amber-200/80 text-amber-900 px-1.5 py-0.5 rounded-full text-[11px]">{req.prayerCount}</span>
+                      <span className="bg-white border border-stone-200 px-1.5 py-0.5 rounded-full text-[11px]">{req.prayerCount}</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => setShowEncouragementBox((prev) => ({ ...prev, [req.id]: !prev[req.id] }))}
-                      className="flex items-center gap-2 bg-[#eef8f6] hover:bg-[#dff2ef] text-[#2f8f84] px-3.5 py-2 rounded-full text-sm font-bold transition-all cursor-pointer border border-[#bfe3de] active:scale-95"
+                      className="flex items-center gap-2 bg-stone-50 hover:bg-stone-100 px-3.5 py-2 rounded-full text-sm font-bold transition-all cursor-pointer border border-stone-200 active:scale-95"
+                      style={{ color: currentTheme.primary }}
                     >
                       <MessageCircle className="w-4 h-4" />
                       <span>Encourage</span>
