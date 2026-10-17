@@ -553,9 +553,8 @@ export const PrayerWall: React.FC<PrayerWallProps> = ({ forceSingleColumn = fals
           </div>
         </div>
       ) : (
-        <div className="bg-white rounded-2xl border border-stone-200 overflow-hidden">
-          <div className={`grid -mb-px prayer-cards-grid ${forceSingleColumn ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2'}`}>
-            {visibleRequests.map((req, idx) => {
+        <div className={`grid gap-2.5 sm:gap-3 prayer-cards-grid ${forceSingleColumn ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2'}`}>
+            {visibleRequests.map((req) => {
               const encouragementCount = req.recentEncouragements?.length || 0;
               return (
                 <div
@@ -569,9 +568,7 @@ export const PrayerWall: React.FC<PrayerWallProps> = ({ forceSingleColumn = fals
                       openCard(req.id);
                     }
                   }}
-                  className={`min-w-0 flex items-center gap-3 px-4 py-3 border-b border-stone-100 hover:bg-stone-50 transition-colors cursor-pointer ${
-                    !forceSingleColumn && idx % 2 === 0 ? 'md:border-r' : ''
-                  }`}
+                  className="min-w-0 flex items-center gap-3 px-4 py-3.5 bg-white rounded-xl border border-stone-200 shadow-xs hover:border-stone-300 hover:shadow-sm transition-all cursor-pointer"
                 >
                   <span
                     className="w-2.5 h-2.5 rounded-full shrink-0"
@@ -625,7 +622,6 @@ export const PrayerWall: React.FC<PrayerWallProps> = ({ forceSingleColumn = fals
                 </div>
               );
             })}
-          </div>
         </div>
       )}
 
