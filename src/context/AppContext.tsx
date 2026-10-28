@@ -126,6 +126,7 @@ interface AppContextType {
   /** Staff correction of any field on a request (e.g. one that imported wrong) */
   updatePrayerRequest: (requestId: string, changes: Partial<PrayerRequest>) => void;
   deletePrayerRequest: (requestId: string) => void;
+  deletePrayerRequests: (requestIds: string[]) => number;
   bulkUpdateBulletinSummaries: (updates: Array<{ id: string; ultraSummary: string }>) => void;
   togglePrayerAnswered: (requestId: string, updateNote?: string) => void;
   updateChurchProfile: (churchId: string, updates: Partial<Church>) => void;
@@ -940,6 +941,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
   };
 
+  const deletePrayerRequests = (requestIds: string[]) => {
+    const ids = new Set(requestIds);
+    const targets = filteredChurchRequests.filter((r) => ids.has(r.id)).map((r) => r.id);
+    if (targets.length === 0) return 0;
+    setRequests((prev) => prev.filter((r) => !ids.has(r.id)));
+    const chunks: string[][] = [];
+    for (let i = 0; i < targets.length; i += 100) chunks.push(targets.slice(i, i + 100));
+    Promise.all(chunks.map((chunk) => supabase.from('prayer_requests').delete().in('id', chunk))).then((results) => {
+      const failed = results.find((res) => res.error);
+      if (failed?.error) {
+        reportError('Deleting prayer requests', failed.error);
+        refreshData();
+      }
+    });
+    return targets.length;
+  };
+
   const togglePrayerAnswered = (requestId: string, updateNote?: string) => {
     const r = requests.find((x) => x.id === requestId);
     if (!r) return;
@@ -1263,13 +1281,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         requesterEmail: item.requesterEmail?.trim() || undefined,
         requesterPhone: item.requesterPhone?.trim() || undefined,
         isAnonymous: Boolean(item.isAnonymous),
-        visibility: 'church', // all imported requests go on the church wall
+        visibility: item.visibility || 'church',
         category: item.category || 'General',
         isUrgent: Boolean(item.isUrgent),
         isAnswered: Boolean(item.isAnswered),
         prayerCount: 1,
         createdAt: parsedDate || new Date(now.getTime() - idx * 60000).toISOString(),
-        status: 'approved',
+        status: item.status || 'approved',
         bulletinSummary: finalTitle.length > 50 ? finalTitle.substring(0, 47) + '...' : finalTitle,
         recentEncouragements: [],
         moderation: {
@@ -1358,6 +1376,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateStaffNotes,
         updatePrayerRequest,
         deletePrayerRequest,
+        deletePrayerRequests,
         bulkUpdateBulletinSummaries,
         togglePrayerAnswered,
         updateChurchProfile,

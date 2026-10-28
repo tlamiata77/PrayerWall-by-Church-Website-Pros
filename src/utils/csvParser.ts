@@ -42,6 +42,9 @@ export function isDateString(val?: string): boolean {
   // MM/DD/YYYY or DD/MM/YYYY or M/D/YY
   if (/^\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}(\s.*)?$/.test(clean)) return true;
 
+  // Month and day without a year, like 10-18 or 10/18
+  if (/^\d{1,2}[-/]\d{1,2}$/.test(clean)) return true;
+
   // Month names like "October 4, 2026" or "Oct 4"
   if (/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2}(,?\s+\d{2,4})?/i.test(clean)) return true;
 
@@ -72,6 +75,18 @@ export function parseDateToISO(val?: string): string | undefined {
     if (y < 100) y += 2000;
     const dt = new Date(Date.UTC(y, m, d, 12, 0, 0));
     if (!isNaN(dt.getTime())) return dt.toISOString();
+  }
+
+  // Month and day without a year: this year, or last year if that date is still ahead
+  const mdMatch = clean.match(/^(\d{1,2})[-/](\d{1,2})$/);
+  if (mdMatch) {
+    const m = parseInt(mdMatch[1], 10) - 1;
+    const d = parseInt(mdMatch[2], 10);
+    if (m > 11 || d < 1 || d > 31) return undefined;
+    const now = new Date();
+    let dt = new Date(Date.UTC(now.getFullYear(), m, d, 12, 0, 0));
+    if (dt.getTime() > now.getTime() + 86400000) dt = new Date(Date.UTC(now.getFullYear() - 1, m, d, 12, 0, 0));
+    return dt.toISOString();
   }
 
   const parsed = new Date(clean);
@@ -491,18 +506,18 @@ export function detectCSVColumnMapping(rawRows: string[][]): {
         colContent = idx;
       } else if (h === 'request' || h === 'requests' || h.includes('prayer') || h.includes('need') || h.includes('petition')) {
         colRequest = idx;
+      } else if (h.includes('email') || h.includes('mail')) {
+        colEmail = idx;
+      } else if (h.includes('phone') || h.includes('cell') || h.includes('tel')) {
+        colPhone = idx;
       } else if (h.includes('name') || h.includes('requester') || h.includes('author') || h.includes('from') || h.includes('submitter') || h.includes('member') || h.includes('person') || h.includes('who')) {
-        colName = idx;
+        if (colName === -1) colName = idx;
       } else if (h.includes('cat') || h.includes('ministry') || h.includes('tag')) {
         colCategory = idx;
       } else if (h.includes('visib') || h.includes('priv') || h.includes('access')) {
         colVisibility = idx;
       } else if (h.includes('urgent') || h.includes('prior') || h.includes('emerg')) {
         colUrgent = idx;
-      } else if (h.includes('email') || h.includes('mail')) {
-        colEmail = idx;
-      } else if (h.includes('phone') || h.includes('cell') || h.includes('tel')) {
-        colPhone = idx;
       } else if (h.includes('answer') || h.includes('praise')) {
         colAnswered = idx;
       }
@@ -631,8 +646,8 @@ export function parseCSVToPrayerRequests(
     const phoneRaw = mapping.colPhone >= 0 ? (row[mapping.colPhone] || '').trim() : '';
     const answeredRaw = mapping.colAnswered >= 0 ? (row[mapping.colAnswered] || '').trim() : '';
 
-    // Determine core prayer text
-    let prayerText = rawRequest || rawContent || rawTitle;
+    // Determine core prayer text: the details column wins over the title/request column
+    let prayerText = rawContent || rawRequest || rawTitle;
     if (!prayerText || isDateString(prayerText)) {
       prayerText = 'Please lift this request in prayer.';
     }

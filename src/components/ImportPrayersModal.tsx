@@ -205,7 +205,8 @@ export const ImportPrayersModal: React.FC = () => {
         result.colTitle = idx;
         result.colRequest = idx;
       } else if (field === 'name') {
-        result.colName = idx;
+        // If more than one column is marked as the name, use the first one
+        if (result.colName === -1) result.colName = idx;
       } else if (field === 'content') {
         result.colContent = idx;
       } else if (field === 'category') {
@@ -239,6 +240,11 @@ export const ImportPrayersModal: React.FC = () => {
       const clean = h.toLowerCase().replace(/[^a-z0-9]/g, '');
       if (idx === mapping.colDate || clean.includes('date') || clean.includes('time') || clean === 'created' || clean === 'submitted') {
         mappings[idx] = 'date';
+      } else if (idx === mapping.colEmail || clean.includes('email')) {
+        // Checked before the name so "Requester Email" isn't taken for the requester's name
+        mappings[idx] = 'email';
+      } else if (idx === mapping.colPhone || clean.includes('phone')) {
+        mappings[idx] = 'phone';
       } else if (idx === mapping.colClass || clean.includes('class') || clean.includes('group') || clean.includes('study')) {
         mappings[idx] = 'class';
       } else if (idx === mapping.colName || clean.includes('name') || clean.includes('requester') || clean.includes('member') || clean.includes('person') || clean.includes('who')) {
@@ -266,10 +272,6 @@ export const ImportPrayersModal: React.FC = () => {
         mappings[idx] = 'visibility';
       } else if (idx === mapping.colUrgent || clean.includes('urgent')) {
         mappings[idx] = 'urgent';
-      } else if (idx === mapping.colEmail || clean.includes('email')) {
-        mappings[idx] = 'email';
-      } else if (idx === mapping.colPhone || clean.includes('phone')) {
-        mappings[idx] = 'phone';
       } else {
         mappings[idx] = 'ignore';
       }
@@ -507,6 +509,7 @@ export const ImportPrayersModal: React.FC = () => {
         isAnonymous: r.isAnonymous,
         churchId: finalChurch.id,
         status: importStatus,
+        createdAt: r.createdAt,
       };
     });
 
