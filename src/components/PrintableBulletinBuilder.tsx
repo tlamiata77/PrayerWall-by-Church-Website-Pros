@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useLayoutEffect, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { RequestCategory, PrayerRequest } from '../types';
 import { isDateString } from '../utils/csvParser';
@@ -80,6 +80,9 @@ export const PrintableBulletinBuilder: React.FC = () => {
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait');
   const [paperSize, setPaperSize] = useState<PaperSize>('letter');
   const [inkMode, setInkMode] = useState<'color' | 'black'>('color');
+  const [fitToOnePage, setFitToOnePage] = useState(true);
+  const [fitScale, setFitScale] = useState(1);
+  const sheetContentRef = useRef<HTMLDivElement>(null);
   const [dateFilter, setDateFilter] = useState<'all' | '14days' | '30days'>('all');
   
   // Print Archive View Mode: 'active' (what will print this Sunday) vs 'archived' (past printed items)
@@ -289,6 +292,32 @@ export const PrintableBulletinBuilder: React.FC = () => {
   };
 
   const brandColor = getChurchTheme(currentChurch).primary;
+
+  // Fit to 1 page: shrink the sheet's contents (CSS zoom, which reflows text) until they fit
+  // the printable height of one page. The preview sheet is exactly the printed width, so what
+  // fits here fits on paper; a small allowance covers browser print differences.
+  useLayoutEffect(() => {
+    const el = sheetContentRef.current;
+    if (!el) return;
+    const available = (pageHeightIn - 2 * paper.margin) * 96 * 0.97;
+    const heightAt = (z: number) => {
+      el.style.zoom = String(z);
+      return el.getBoundingClientRect().height;
+    };
+    let best = 1;
+    if (fitToOnePage && heightAt(1) > available) {
+      let lo = 0.3;
+      let hi = 1;
+      for (let i = 0; i < 12; i++) {
+        const mid = (lo + hi) / 2;
+        if (heightAt(mid) <= available) lo = mid;
+        else hi = mid;
+      }
+      best = Math.floor(lo * 1000) / 1000;
+    }
+    el.style.zoom = String(best);
+    if (Math.abs(best - fitScale) > 0.001) setFitScale(best);
+  });
 
   // Helper to extract clean dignified summary text without date strings
   const getItemSummaryText = (item: PrayerRequest) => {
@@ -970,6 +999,26 @@ export const PrintableBulletinBuilder: React.FC = () => {
               </select>
             </div>
 
+            <label className="flex items-center gap-1.5 pt-1 text-[11px] cursor-pointer">
+              <input
+                type="checkbox"
+                checked={fitToOnePage}
+                onChange={(e) => setFitToOnePage(e.target.checked)}
+                className="cursor-pointer"
+              />
+              <span className="font-semibold text-stone-700">Fit to 1 page</span>
+              {fitToOnePage && fitScale < 1 && (
+                <span className={`ml-auto font-mono ${fitScale < 0.7 ? 'text-rose-700 font-bold' : 'text-stone-500'}`}>
+                  shrunk to {Math.round(fitScale * 100)}%
+                </span>
+              )}
+            </label>
+            {fitToOnePage && fitScale < 0.7 && (
+              <p className="text-[10px] text-rose-700 leading-snug">
+                Text is getting very small. Try more columns, Wide pages, or archiving older requests from print.
+              </p>
+            )}
+
             <div className="flex items-center gap-1.5 pt-1 text-[11px]">
               <span className="text-stone-500 w-9">Ink:</span>
               <button
@@ -1152,21 +1201,22 @@ export const PrintableBulletinBuilder: React.FC = () => {
       <style>{`@media print { @page { size: ${pageWidthIn}in ${pageHeightIn}in; margin: ${paper.margin}in; } }`}</style>
 
       {/* Live Printable Sheet Preview Container (Rendered exactly for print and screen) */}
-      <div className="bg-stone-300/40 p-2 sm:p-6 rounded-2xl flex justify-center no-print-bg print:p-0 print:bg-transparent print:block">
+      <div className="bg-stone-300/40 p-2 sm:p-6 rounded-2xl flex justify-center-safe overflow-x-auto no-print-bg print:p-0 print:bg-transparent print:block print:overflow-visible">
         <div
-          className={`printable-area ${inkMode === 'black' ? 'ink-black' : 'ink-color'} bg-white text-stone-900 shadow-xl w-full transition-all border border-stone-200 ${
+          className={`printable-area ${inkMode === 'black' ? 'ink-black' : 'ink-color'} bg-white text-stone-900 shadow-xl shrink-0 box-border transition-all border border-stone-200 ${
             fontSizeClasses[fontSize]
           }`}
           style={
             {
               // On screen the sheet is the real paper size, with the print margin as padding
-              maxWidth: `${pageWidthIn}in`,
+              width: `${pageWidthIn}in`,
               minHeight: `${pageHeightIn}in`,
               padding: `${paper.margin}in`,
               '--brand': brandColor,
             } as React.CSSProperties
           }
         >
+          <div ref={sheetContentRef}>
           {/* Sheet Header: Compact, Ink-friendly Header */}
           <div className="brand-rule border-b-2 border-stone-900 pb-2.5 mb-3.5">
             <div className="flex items-start justify-between gap-3">
@@ -1475,6 +1525,7 @@ export const PrintableBulletinBuilder: React.FC = () => {
               </p>
             </div>
           )}
+          </div>
         </div>
       </div>
     </div>
