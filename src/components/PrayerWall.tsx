@@ -32,6 +32,7 @@ import {
   MessageCircle,
   X,
   CheckSquare,
+  Trash2,
 } from 'lucide-react';
 import { PrayingHands } from './icons/PrayingHands';
 
@@ -68,6 +69,7 @@ export const PrayerWall: React.FC<PrayerWallProps> = ({ forceSingleColumn = fals
     bulkArchiveOlderWallPrayers,
     restoreAllWallArchives,
     setPrayersArchived,
+    deletePrayerRequests,
     repairDateTitles,
   } = useApp();
 
@@ -732,6 +734,21 @@ export const PrayerWall: React.FC<PrayerWallProps> = ({ forceSingleColumn = fals
             >
               {wallViewMode === 'active' ? <Archive className="w-4 h-4" /> : <RotateCcw className="w-4 h-4" />}
               <span>{wallViewMode === 'active' ? 'Archive' : 'Restore'}</span>
+            </button>
+            <button
+              type="button"
+              disabled={selectedIds.size === 0}
+              onClick={() => {
+                const n = selectedIds.size;
+                if (!window.confirm(`Permanently delete ${n} ${n === 1 ? 'prayer' : 'prayers'}? This can't be undone. (To hide prayers but keep them, use Archive instead.)`)) return;
+                const count = deletePrayerRequests([...selectedIds]);
+                exitSelectMode();
+                showToast(`Deleted ${count} ${count === 1 ? 'prayer' : 'prayers'}.`);
+              }}
+              className="flex items-center gap-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold px-3 py-1.5 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+            >
+              <Trash2 className="w-4 h-4" />
+              <span>Delete</span>
             </button>
             <button
               type="button"
