@@ -31,6 +31,7 @@ import {
   Pencil,
   MessageCircle,
   X,
+  CheckSquare,
 } from 'lucide-react';
 import { PrayingHands } from './icons/PrayingHands';
 
@@ -66,6 +67,7 @@ export const PrayerWall: React.FC<PrayerWallProps> = ({ forceSingleColumn = fals
     bulkArchiveAnsweredPrayers,
     bulkArchiveOlderWallPrayers,
     restoreAllWallArchives,
+    setPrayersArchived,
     repairDateTitles,
   } = useApp();
 
@@ -83,6 +85,27 @@ export const PrayerWall: React.FC<PrayerWallProps> = ({ forceSingleColumn = fals
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [openRequestId, setOpenRequestId] = useState<string | null>(null);
   const isStaff = activeRole === 'church_staff' || activeRole === 'super_admin';
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const exitSelectMode = () => {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+  };
+
+  const toggleSelected = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  // Selections belong to one church and one view (active or archived)
+  useEffect(() => {
+    exitSelectMode();
+  }, [currentChurch.id, wallViewMode, isStaff]);
   const openRequest = openRequestId ? filteredChurchRequests.find((r) => r.id === openRequestId) || null : null;
 
   const openCard = (id: string, withEncouragement = false) => {
@@ -178,7 +201,7 @@ export const PrayerWall: React.FC<PrayerWallProps> = ({ forceSingleColumn = fals
     <div className="prayer-wall-container max-w-7xl mx-auto px-2 sm:px-4 py-6 space-y-6">
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed top-4 left-4 right-4 sm:top-auto sm:left-auto sm:bottom-5 sm:right-5 z-50 bg-stone-900 text-white px-4 py-3 rounded-xl shadow-xl flex items-center gap-3 border border-stone-700 animate-bounce">
+        <div className="fixed top-4 left-4 right-4 sm:top-auto sm:left-auto sm:bottom-24 sm:right-5 z-50 bg-stone-900 text-white px-4 py-3 rounded-xl shadow-xl flex items-center gap-3 border border-stone-700 animate-bounce">
           <Heart className="w-5 h-5 text-amber-400 fill-amber-400" />
           <span className="text-sm font-medium">{toastMessage}</span>
         </div>
@@ -372,7 +395,7 @@ export const PrayerWall: React.FC<PrayerWallProps> = ({ forceSingleColumn = fals
               </div>
 
               {/* Bulk Archiving & Restoring Tools */}
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 {wallViewMode === 'active' ? (
                   <>
                     <button
@@ -398,6 +421,25 @@ export const PrayerWall: React.FC<PrayerWallProps> = ({ forceSingleColumn = fals
                       <Archive className="w-3 h-3 text-stone-500" />
                       <span>Archive Inactive (&gt;30d)</span>
                     </button>
+
+                    <button
+                      onClick={() => {
+                        const ids = filteredChurchRequests.filter((r) => !r.isArchived && r.status === 'approved').map((r) => r.id);
+                        if (ids.length === 0) {
+                          showToast('There are no active prayers to archive.');
+                          return;
+                        }
+                        if (!window.confirm(`Archive all ${ids.length} active prayers? They'll move to the Archived Prayers Vault, and you can restore them any time.`)) return;
+                        const count = setPrayersArchived(ids, true, 'Archived with all active prayers');
+                        exitSelectMode();
+                        showToast(`Archived ${count} prayers to the vault.`);
+                      }}
+                      className="text-xs text-purple-800 hover:bg-purple-50 px-2.5 py-1 rounded-md border border-purple-200 transition-colors cursor-pointer flex items-center gap-1 font-medium"
+                      title="Move every active prayer off the wall into the archive (you can restore them later)"
+                    >
+                      <Archive className="w-3 h-3 text-purple-600" />
+                      <span>Archive All Active ({totalActiveWallCount})</span>
+                    </button>
                   </>
                 ) : (
                   totalArchivedWallCount > 0 && (
@@ -414,6 +456,19 @@ export const PrayerWall: React.FC<PrayerWallProps> = ({ forceSingleColumn = fals
                     </button>
                   )
                 )}
+
+                <button
+                  onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}
+                  className={`text-xs px-2.5 py-1 rounded-md border transition-colors cursor-pointer flex items-center gap-1 font-bold ${
+                    selectMode
+                      ? 'bg-stone-900 text-white border-stone-900'
+                      : 'text-stone-700 border-stone-300 hover:bg-stone-100'
+                  }`}
+                  title="Pick individual prayers to archive or restore together"
+                >
+                  <CheckSquare className="w-3.5 h-3.5" />
+                  <span>{selectMode ? 'Done Selecting' : 'Select'}</span>
+                </button>
               </div>
             </div>
 
@@ -553,26 +608,38 @@ export const PrayerWall: React.FC<PrayerWallProps> = ({ forceSingleColumn = fals
           </div>
         </div>
       ) : (
-        <div className="bg-white rounded-2xl border border-stone-200 overflow-hidden">
-          <div className={`grid -mb-px prayer-cards-grid ${forceSingleColumn ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2'}`}>
-            {visibleRequests.map((req, idx) => {
+        <div className={`grid gap-2.5 sm:gap-3 prayer-cards-grid ${forceSingleColumn ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2'}`}>
+            {visibleRequests.map((req) => {
               const encouragementCount = req.recentEncouragements?.length || 0;
               return (
                 <div
                   key={req.id}
                   role="button"
                   tabIndex={0}
-                  onClick={() => openCard(req.id)}
+                  aria-pressed={selectMode ? selectedIds.has(req.id) : undefined}
+                  onClick={() => (selectMode ? toggleSelected(req.id) : openCard(req.id))}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
-                      openCard(req.id);
+                      if (selectMode) toggleSelected(req.id);
+                      else openCard(req.id);
                     }
                   }}
-                  className={`min-w-0 flex items-center gap-3 px-4 py-3 border-b border-stone-100 hover:bg-stone-50 transition-colors cursor-pointer ${
-                    !forceSingleColumn && idx % 2 === 0 ? 'md:border-r' : ''
+                  className={`min-w-0 flex items-center gap-3 px-4 py-3.5 bg-white rounded-xl border shadow-xs hover:shadow-sm transition-all cursor-pointer ${
+                    selectMode && selectedIds.has(req.id)
+                      ? 'border-stone-900 ring-1 ring-stone-900'
+                      : 'border-stone-200 hover:border-stone-300'
                   }`}
                 >
+                  {selectMode && (
+                    <span
+                      className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 ${
+                        selectedIds.has(req.id) ? 'bg-stone-900 border-stone-900 text-white' : 'border-stone-300 bg-white'
+                      }`}
+                    >
+                      {selectedIds.has(req.id) && <Check className="w-3.5 h-3.5" strokeWidth={3} />}
+                    </span>
+                  )}
                   <span
                     className="w-2.5 h-2.5 rounded-full shrink-0"
                     style={{
@@ -590,6 +657,7 @@ export const PrayerWall: React.FC<PrayerWallProps> = ({ forceSingleColumn = fals
                       {req.isArchived && <span className="text-purple-700 font-semibold"> · Archived</span>}
                     </p>
                   </div>
+                  {!selectMode && (
                   <div className="flex items-center gap-1.5 shrink-0">
                     <button
                       type="button"
@@ -597,11 +665,8 @@ export const PrayerWall: React.FC<PrayerWallProps> = ({ forceSingleColumn = fals
                         e.stopPropagation();
                         handlePray(req);
                       }}
-                      className={`flex items-center gap-1 px-2.5 py-1.5 rounded-full border text-[13px] font-bold transition-all active:scale-95 cursor-pointer ${
-                        req.prayedByMe
-                          ? 'bg-amber-100 border-amber-400 text-amber-900'
-                          : 'bg-[#fff8e6] border-[#f2d47a] text-[#8a4b0c] hover:bg-amber-100'
-                      }`}
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-full border bg-stone-50 border-stone-200 hover:bg-stone-100 text-[13px] font-bold transition-all active:scale-95 cursor-pointer"
+                      style={{ color: currentTheme.primary, ...(req.prayedByMe ? { borderColor: `${currentTheme.primary}80` } : {}) }}
                       title="I prayed for this"
                       aria-label={`I prayed for this (${req.prayerCount} prayers)`}
                     >
@@ -614,7 +679,8 @@ export const PrayerWall: React.FC<PrayerWallProps> = ({ forceSingleColumn = fals
                         e.stopPropagation();
                         openCard(req.id, true);
                       }}
-                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-full border border-[#bfe3de] bg-[#eef8f6] text-[#2f8f84] text-[13px] font-bold transition-all active:scale-95 hover:bg-[#dff2ef] cursor-pointer"
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-full border bg-stone-50 border-stone-200 hover:bg-stone-100 text-[13px] font-bold transition-all active:scale-95 cursor-pointer"
+                      style={{ color: currentTheme.primary }}
                       title="Send encouragement"
                       aria-label="Send encouragement"
                     >
@@ -622,9 +688,58 @@ export const PrayerWall: React.FC<PrayerWallProps> = ({ forceSingleColumn = fals
                       {encouragementCount > 0 && <span>{encouragementCount}</span>}
                     </button>
                   </div>
+                  )}
                 </div>
               );
             })}
+        </div>
+      )}
+
+      {/* Bulk selection bar (staff) */}
+      {selectMode && (
+        <div className="fixed bottom-4 inset-x-3 sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 z-30 bg-stone-900 text-white rounded-2xl shadow-xl px-4 py-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
+          <span className="font-bold">{selectedIds.size} selected</span>
+          <button
+            type="button"
+            onClick={() =>
+              setSelectedIds((prev) =>
+                prev.size === visibleRequests.length && visibleRequests.length > 0
+                  ? new Set()
+                  : new Set(visibleRequests.map((r) => r.id))
+              )
+            }
+            className="underline underline-offset-2 text-stone-200 hover:text-white cursor-pointer"
+          >
+            {selectedIds.size === visibleRequests.length && visibleRequests.length > 0
+              ? 'Clear all'
+              : `Select all shown (${visibleRequests.length})`}
+          </button>
+          <div className="flex items-center gap-2 ml-auto">
+            <button
+              type="button"
+              disabled={selectedIds.size === 0}
+              onClick={() => {
+                const archive = wallViewMode === 'active';
+                const count = setPrayersArchived([...selectedIds], archive);
+                exitSelectMode();
+                showToast(
+                  archive
+                    ? `Archived ${count} ${count === 1 ? 'prayer' : 'prayers'} to the vault.`
+                    : `Restored ${count} ${count === 1 ? 'prayer' : 'prayers'} to the active wall.`
+                );
+              }}
+              className="flex items-center gap-1.5 bg-white text-stone-900 font-bold px-3 py-1.5 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+            >
+              {wallViewMode === 'active' ? <Archive className="w-4 h-4" /> : <RotateCcw className="w-4 h-4" />}
+              <span>{wallViewMode === 'active' ? 'Archive' : 'Restore'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={exitSelectMode}
+              className="px-2 py-1.5 rounded-lg text-stone-300 hover:text-white hover:bg-white/10 cursor-pointer"
+            >
+              Cancel
+            </button>
           </div>
         </div>
       )}
@@ -750,16 +865,18 @@ export const PrayerWall: React.FC<PrayerWallProps> = ({ forceSingleColumn = fals
                     <button
                       type="button"
                       onClick={() => handlePray(req)}
-                      className="flex items-center gap-2 bg-[#fff8e6] hover:bg-amber-100 text-[#8a4b0c] px-3.5 py-2 rounded-full text-sm font-bold transition-all cursor-pointer border border-[#f2d47a] active:scale-95"
+                      className="flex items-center gap-2 bg-stone-50 hover:bg-stone-100 px-3.5 py-2 rounded-full text-sm font-bold transition-all cursor-pointer border border-stone-200 active:scale-95"
+                      style={{ color: currentTheme.primary }}
                     >
                       <PrayingHands className="w-4 h-4" />
                       <span>{req.prayedByMe ? 'I prayed again' : 'I prayed'}</span>
-                      <span className="bg-amber-200/80 text-amber-900 px-1.5 py-0.5 rounded-full text-[11px]">{req.prayerCount}</span>
+                      <span className="bg-white border border-stone-200 px-1.5 py-0.5 rounded-full text-[11px]">{req.prayerCount}</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => setShowEncouragementBox((prev) => ({ ...prev, [req.id]: !prev[req.id] }))}
-                      className="flex items-center gap-2 bg-[#eef8f6] hover:bg-[#dff2ef] text-[#2f8f84] px-3.5 py-2 rounded-full text-sm font-bold transition-all cursor-pointer border border-[#bfe3de] active:scale-95"
+                      className="flex items-center gap-2 bg-stone-50 hover:bg-stone-100 px-3.5 py-2 rounded-full text-sm font-bold transition-all cursor-pointer border border-stone-200 active:scale-95"
+                      style={{ color: currentTheme.primary }}
                     >
                       <MessageCircle className="w-4 h-4" />
                       <span>Encourage</span>
