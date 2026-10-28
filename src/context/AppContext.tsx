@@ -138,6 +138,7 @@ interface AppContextType {
   bulkArchiveAnsweredPrayers: () => number;
   bulkArchiveOlderWallPrayers: (daysOld?: number) => number;
   restoreAllWallArchives: () => void;
+  setPrayersArchived: (requestIds: string[], archive: boolean, reason?: string) => number;
   isModerating: boolean;
   importModalOpen: boolean;
   setImportModalOpen: (open: boolean) => void;
@@ -1096,6 +1097,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   };
 
+  const setPrayersArchived = (requestIds: string[], archive: boolean, reason?: string) => {
+    const ids = new Set(requestIds);
+    const now = new Date().toISOString();
+    const targets = filteredChurchRequests.filter((r) => ids.has(r.id) && !!r.isArchived !== archive);
+    saveRequestChanges(
+      targets.map((r) => ({
+        id: r.id,
+        patch: archive
+          ? { isArchived: true, archivedAt: now, archivedReason: reason || 'Archived by pastoral staff' }
+          : { isArchived: false, archivedAt: undefined, archivedReason: undefined },
+      })),
+      archive ? 'Archiving prayers' : 'Restoring archived prayers'
+    );
+    return targets.length;
+  };
+
   // Super admin: add a client church directly
   const addNewChurch = (churchData: Omit<Church, 'id'>) => {
     const existing = churches.find(
@@ -1353,6 +1370,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         bulkArchiveAnsweredPrayers,
         bulkArchiveOlderWallPrayers,
         restoreAllWallArchives,
+        setPrayersArchived,
         isModerating,
         importModalOpen,
         setImportModalOpen,
