@@ -293,25 +293,33 @@ export const PrintableBulletinBuilder: React.FC = () => {
 
   const brandColor = getChurchTheme(currentChurch).primary;
 
-  // Fit to 1 page: shrink the sheet's contents (CSS zoom, which reflows text) until they fit
-  // the printable height of one page. The preview sheet is exactly the printed width, so what
-  // fits here fits on paper; a small allowance covers browser print differences.
+  // Fit to page: scale the sheet's contents (CSS zoom, which reflows text) so they fill the
+  // printable height of one page: shrink when there is too much, enlarge when there is little
+  // (a short list used to print in the top half of the page with the rest left blank).
+  // The preview sheet is exactly the printed width, so what fits here fits on paper; a small
+  // allowance covers browser print differences.
   useLayoutEffect(() => {
     const el = sheetContentRef.current;
     if (!el) return;
+    const MAX_GROW = 1.8; // never blow a very short list up past this
     const available = (pageHeightIn - 2 * paper.margin) * 96 * 0.97;
     const heightAt = (z: number) => {
       el.style.zoom = String(z);
       return el.getBoundingClientRect().height;
     };
     let best = 1;
-    if (fitToOnePage && heightAt(1) > available) {
-      let lo = 0.3;
-      let hi = 1;
-      for (let i = 0; i < 12; i++) {
-        const mid = (lo + hi) / 2;
-        if (heightAt(mid) <= available) lo = mid;
-        else hi = mid;
+    if (fitToOnePage) {
+      const fitsAtOne = heightAt(1) <= available;
+      let lo = fitsAtOne ? 1 : 0.3;
+      let hi = fitsAtOne ? MAX_GROW : 1;
+      if (fitsAtOne && heightAt(MAX_GROW) <= available) {
+        lo = MAX_GROW;
+      } else {
+        for (let i = 0; i < 12; i++) {
+          const mid = (lo + hi) / 2;
+          if (heightAt(mid) <= available) lo = mid;
+          else hi = mid;
+        }
       }
       best = Math.floor(lo * 1000) / 1000;
     }
@@ -326,7 +334,18 @@ export const PrintableBulletinBuilder: React.FC = () => {
       summary = item.content && !isDateString(item.content) ? item.content : 'Prayer Request';
     }
     // Clean out bracketed class prefixes like [Joy] from display line
-    return summary.replace(/^\[[^\]]+\]\s*/, '').trim();
+    summary = summary.replace(/^\[[^\]]+\]\s*/, '').trim();
+
+    // Older imports cut each line to ~50 characters and added "..."; when the full wording
+    // is still on the request, print that instead of the clipped copy.
+    if (/(\.\.\.|…)$/.test(summary)) {
+      const stem = summary.replace(/(\.\.\.|…)$/, '').trim();
+      const full = [item.title, item.content]
+        .map((t) => (t || '').replace(/^\[[^\]]+\]\s*/, '').trim())
+        .find((t) => t.length > stem.length && t.startsWith(stem));
+      if (full) return full;
+    }
+    return summary;
   };
 
   // Save as PDF uses the browser's own print engine, which lays out real text and
@@ -1010,6 +1029,11 @@ export const PrintableBulletinBuilder: React.FC = () => {
               {fitToOnePage && fitScale < 1 && (
                 <span className={`ml-auto font-mono ${fitScale < 0.7 ? 'text-rose-700 font-bold' : 'text-stone-500'}`}>
                   shrunk to {Math.round(fitScale * 100)}%
+                </span>
+              )}
+              {fitToOnePage && fitScale > 1 && (
+                <span className="ml-auto font-mono text-stone-500">
+                  enlarged to {Math.round(fitScale * 100)}%
                 </span>
               )}
             </label>
