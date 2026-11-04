@@ -1288,7 +1288,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         prayerCount: 1,
         createdAt: parsedDate || new Date(now.getTime() - idx * 60000).toISOString(),
         status: item.status || 'approved',
-        bulletinSummary: finalTitle.length > 50 ? finalTitle.substring(0, 47) + '...' : finalTitle,
+        // Keep the full wording; the printed list wraps long lines instead of clipping them
+        bulletinSummary: finalTitle,
         recentEncouragements: [],
         moderation: {
           safetyScore: 98,
