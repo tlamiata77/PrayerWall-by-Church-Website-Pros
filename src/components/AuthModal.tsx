@@ -650,7 +650,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     Launch Your Church's Prayer Wall & Suite
                   </span>
                   <p className="text-[11px] text-stone-600 mt-0.5 leading-relaxed">
-                    Instantly provisions your congregation's dedicated prayer wall, printable Sunday bulletin builder, photo directory, and pastoral moderation portal.
+                    Instantly provisions your congregation's dedicated prayer wall, printable prayer list, photo directory, and pastoral moderation portal.
                   </p>
                 </div>
               </div>

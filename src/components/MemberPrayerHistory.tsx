@@ -394,7 +394,7 @@ export const MemberPrayerHistory: React.FC = () => {
                       <div className="flex items-center gap-2">
                         <RotateCcw className="w-4 h-4 text-amber-700" />
                         <h4 className="text-xs font-bold text-amber-950 uppercase tracking-wide">
-                          Resubmit Request to Current Church Wall & Bulletin
+                          Resubmit Request to Current Church Wall & Prayer List
                         </h4>
                       </div>
                       <button
@@ -406,7 +406,7 @@ export const MemberPrayerHistory: React.FC = () => {
                     </div>
 
                     <p className="text-xs text-stone-600">
-                      Resubmitting bumps this prayer back to the top of the {currentChurch.name} Prayer Wall and marks it as active for this coming Sunday's bulletin insert.
+                      Resubmitting bumps this prayer back to the top of the {currentChurch.name} Prayer Wall and marks it as active for this week's printable prayer list.
                     </p>
 
                     <div>

@@ -121,7 +121,7 @@ export const AppNavigation: React.FC = () => {
                     ? 'bg-amber-500 text-stone-950 font-bold shadow-xs'
                     : 'text-stone-300 hover:text-white hover:bg-stone-700/50'
                 }`}
-                title="Church Pastor & Staff Portal: Review private requests, moderate, generate Sunday bulletin"
+                title="Church Pastor & Staff Portal: Review private requests, moderate, print the prayer list"
               >
                 <ShieldCheck className="w-3.5 h-3.5" />
                 <span className="font-medium">Pastor / Staff</span>
@@ -426,7 +426,7 @@ export const AppNavigation: React.FC = () => {
             <span>Prayer Wall</span>
           </button>
 
-          {/* Sunday Bulletin Builder - Pastor & Staff Accounts Only */}
+          {/* Printable Prayer List - Pastor & Staff Accounts Only */}
           {isPastorOrStaff && (
             <button
               onClick={() => setActiveTab('bulletin')}
@@ -437,7 +437,7 @@ export const AppNavigation: React.FC = () => {
               }`}
             >
               <Printer className="w-4 h-4 text-emerald-600" />
-              <span>Sunday Bulletin Builder</span>
+              <span>Printable Prayer List</span>
               <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
                 Print
               </span>

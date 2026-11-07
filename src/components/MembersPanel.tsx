@@ -67,7 +67,7 @@ export const MembersPanel: React.FC = () => {
           <h3 className="font-serif-church font-bold text-lg text-stone-900">
             Church Accounts ({approved.length})
           </h3>
-          <span className="text-xs text-stone-500">Staff can moderate, print bulletins, and manage members</span>
+          <span className="text-xs text-stone-500">Staff can moderate, print prayer lists, and manage members</span>
         </div>
         <ul className="divide-y divide-stone-100">
           {approved.map((u) => {

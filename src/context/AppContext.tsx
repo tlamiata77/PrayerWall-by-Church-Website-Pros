@@ -994,7 +994,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const bulkUpdateBulletinSummaries = (updates: Array<{ id: string; ultraSummary: string }>) => {
     saveRequestChanges(
       updates.map((u) => ({ id: u.id, patch: { bulletinSummary: u.ultraSummary } })),
-      'Saving bulletin lines'
+      'Saving prayer list lines'
     );
   };
 
@@ -1052,7 +1052,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           },
         },
       ],
-      'Archiving from bulletin'
+      'Archiving from the printable prayer list'
     );
   };
 
@@ -1063,7 +1063,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const targets = filteredChurchRequests.filter((r) => !r.isArchivedFromPrint && new Date(r.createdAt) <= cutoff);
     saveRequestChanges(
       targets.map((r) => ({ id: r.id, patch: { isArchivedFromPrint: true, archivedFromPrintAt: now } })),
-      'Archiving last week from bulletin'
+      'Archiving last week from the printable prayer list'
     );
     return targets.length;
   };
@@ -1072,7 +1072,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const targets = filteredChurchRequests.filter((r) => r.isArchivedFromPrint);
     saveRequestChanges(
       targets.map((r) => ({ id: r.id, patch: { isArchivedFromPrint: false, archivedFromPrintAt: undefined } })),
-      'Restoring bulletin archive'
+      'Restoring the printable prayer list archive'
     );
   };
 
