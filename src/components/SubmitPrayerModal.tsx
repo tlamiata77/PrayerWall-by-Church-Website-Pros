@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { VisibilityType, RequestCategory } from '../types';
-import { useSpeechToText } from '../hooks/useSpeechToText';
+import { useSpeechToText, isInsideFrame } from '../hooks/useSpeechToText';
 import {
   X,
   Lock,
@@ -588,6 +588,16 @@ export const SubmitPrayerModal: React.FC = () => {
                     <div className="flex-1">
                       <span className="font-semibold block">Microphone Notice:</span>
                       <p className="text-[11px] leading-tight text-rose-300">{speechError}</p>
+                      {isInsideFrame && (
+                        <a
+                          href={window.location.href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-block mt-1.5 text-[11px] font-bold text-white underline underline-offset-2"
+                        >
+                          Open the prayer wall in its own window
+                        </a>
+                      )}
                     </div>
                   </div>
                 )}

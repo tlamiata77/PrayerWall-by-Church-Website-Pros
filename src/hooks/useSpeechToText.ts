@@ -12,6 +12,30 @@ export interface SpeechToTextState {
   error: string | null;
 }
 
+/** True when the page is shown inside another site's frame (the website embed) */
+export const isInsideFrame = (() => {
+  try {
+    return typeof window !== 'undefined' && window.self !== window.top;
+  } catch {
+    return true; // reading window.top across sites can throw
+  }
+})();
+
+// A frame can only use the microphone if the embedding page's <iframe> grants it
+// (allow="microphone"); otherwise browsers refuse without ever asking the visitor.
+const FRAME_BLOCKED_MESSAGE =
+  "This church website's prayer form isn't allowed to use the microphone. Tap the microphone on your phone's keyboard to dictate instead, or open the prayer wall in its own window.";
+
+const frameBlocksMicrophone = () => {
+  if (!isInsideFrame) return false;
+  const policy = (document as any).permissionsPolicy || (document as any).featurePolicy;
+  try {
+    return policy?.allowsFeature ? !policy.allowsFeature('microphone') : false;
+  } catch {
+    return false;
+  }
+};
+
 export function useSpeechToText() {
   const [isSupported, setIsSupported] = useState(true);
   const [isListening, setIsListening] = useState(false);
@@ -106,6 +130,11 @@ export function useSpeechToText() {
     const hasWebSpeech = typeof window !== 'undefined' &&
       ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
 
+    if (frameBlocksMicrophone()) {
+      setError(FRAME_BLOCKED_MESSAGE);
+      return;
+    }
+
     // 1. Request microphone access
     let stream: MediaStream | null = null;
     try {
@@ -184,7 +213,9 @@ export function useSpeechToText() {
     } catch (err: any) {
       console.error('Microphone permission error:', err);
       let errMsg = 'Microphone access was denied or is unavailable.';
-      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+      if ((err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') && isInsideFrame) {
+        errMsg = FRAME_BLOCKED_MESSAGE;
+      } else if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
         errMsg = 'Microphone permission blocked. Please allow microphone access in your browser settings to record your prayer.';
       } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
         errMsg = 'No microphone device was detected on your system.';
