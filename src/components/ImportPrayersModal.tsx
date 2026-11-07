@@ -50,7 +50,7 @@ const SYSTEM_FIELDS: FieldOption[] = [
     value: 'title',
     label: 'Prayer Title / Short Statement',
     icon: '📌',
-    desc: 'Main bold headline on church wall & bulletin (e.g. "GI doctor on Monday")',
+    desc: 'Main bold headline on the church wall & printable prayer list (e.g. "GI doctor on Monday")',
     badgeColor: 'bg-amber-100 text-amber-900 border-amber-300',
   },
   {

@@ -22,8 +22,8 @@ const lineFor = (r: PrayerRequest) => {
 
 /**
  * Read-only "This Week's Prayer List" for visitors: the same requests the church's
- * Sunday bulletin prints (approved, shared with the church, not archived from the wall
- * or rotated off the bulletin). Private requests and contact details are never shown.
+ * printable prayer list prints (approved, shared with the church, not archived from the wall
+ * or rotated off the printable list). Private requests and contact details are never shown.
  */
 export const WeeklyPrayerList: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const { filteredChurchRequests, currentChurch } = useApp();

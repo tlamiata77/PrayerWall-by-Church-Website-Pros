@@ -78,7 +78,7 @@ export const INITIAL_CHURCHES: Church[] = [
     accentColor: '#78350f',
     welcomeMessage: 'Welcome to Calvary Baptist Church. We are dedicated to praying without ceasing for our flock, our community, and the nations.',
     scriptureVerse: 'Pray without ceasing. In everything give thanks: for this is the will of God in Christ Jesus concerning you. — 1 Thessalonians 5:17-18',
-    bulletinTitle: 'Calvary Baptist Church Weekly Prayer Bulletin',
+    bulletinTitle: 'Calvary Baptist Church Weekly Prayer List',
     settings: {
       allowAnonymous: true,
       requireStaffReviewBeforePublish: false,

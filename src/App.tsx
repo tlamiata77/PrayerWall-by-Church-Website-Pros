@@ -145,7 +145,7 @@ export default function App({ embed = false }: { embed?: boolean }) {
               </span>
               <span>by Church Website Pros</span>
               <span className="text-stone-300">•</span>
-              <span>Multi-Tenant Church Prayer Management & Bulletin Suite</span>
+              <span>Multi-Tenant Church Prayer Management & Printable Prayer Lists</span>
             </div>
 
             <div className="flex items-center gap-4 text-stone-600">
@@ -155,7 +155,7 @@ export default function App({ embed = false }: { embed?: boolean }) {
               </span>
               <span className="flex items-center gap-1">
                 <Printer className="w-3.5 h-3.5 text-emerald-600" />
-                1-Click Sunday Bulletin
+                1-Click Printable Prayer List
               </span>
               <span className="flex items-center gap-1">
                 <Globe className="w-3.5 h-3.5 text-indigo-600" />

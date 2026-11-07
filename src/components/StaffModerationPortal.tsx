@@ -188,7 +188,7 @@ export const StaffModerationPortal: React.FC = () => {
           </h2>
 
           <p className="text-stone-600 text-sm max-w-lg mx-auto leading-relaxed">
-            This module contains confidential pastoral prayer requests, community moderation queues, bulletin publication tools, and church administrative settings. Access is restricted to pastors, ordained elders, and authorized church staff.
+            This module contains confidential pastoral prayer requests, community moderation queues, printable prayer list tools, and church administrative settings. Access is restricted to pastors, ordained elders, and authorized church staff.
           </p>
 
           <div className="bg-stone-50 border border-stone-200 rounded-xl p-4 text-xs text-stone-700 max-w-md mx-auto text-left space-y-2">
@@ -203,7 +203,7 @@ export const StaffModerationPortal: React.FC = () => {
             </div>
             <div className="flex items-center gap-2">
               <Printer className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Sunday Bulletin Publishing & Archiving</span>
+              <span>Printable Prayer List & Archiving</span>
             </div>
           </div>
 
@@ -783,7 +783,7 @@ export const StaffModerationPortal: React.FC = () => {
                   {currentChurch.name} Archival Vault
                 </h3>
                 <p className="text-xs text-stone-600 max-w-2xl mt-1">
-                  Churches need two distinct archiving tiers: one for the <strong>live public prayer wall</strong>, and one specifically for the <strong>printed Sunday bulletin</strong>.
+                  Churches need two distinct archiving tiers: one for the <strong>live public prayer wall</strong>, and one specifically for the <strong>printable prayer list</strong>.
                 </p>
               </div>
 
@@ -804,7 +804,7 @@ export const StaffModerationPortal: React.FC = () => {
                     className="text-xs text-stone-700 bg-stone-100 hover:bg-stone-200 border border-stone-200 px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
                   >
                     <Printer className="w-3.5 h-3.5 text-stone-500" />
-                    <span>Restore All to Bulletin</span>
+                    <span>Restore All to Prayer List</span>
                   </button>
                 )}
               </div>
@@ -831,7 +831,7 @@ export const StaffModerationPortal: React.FC = () => {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 font-bold text-stone-900 text-sm">
                     <Printer className="w-4 h-4 text-stone-600" />
-                    <span>Sunday Bulletin Print Archive</span>
+                    <span>Printable Prayer List Archive</span>
                   </div>
                   <span className="bg-stone-200 text-stone-800 font-mono font-bold text-xs px-2 py-0.5 rounded-md">
                     {filteredChurchRequests.filter((r) => r.isArchivedFromPrint).length} Archived
@@ -874,7 +874,7 @@ export const StaffModerationPortal: React.FC = () => {
                     : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
                 }`}
               >
-                Bulletin Print Archives ({filteredChurchRequests.filter((r) => r.isArchivedFromPrint).length})
+                Prayer List Print Archives ({filteredChurchRequests.filter((r) => r.isArchivedFromPrint).length})
               </button>
             </div>
           </div>
@@ -891,7 +891,7 @@ export const StaffModerationPortal: React.FC = () => {
                 No Archived Prayers in this View
               </h4>
               <p className="text-xs text-stone-500 max-w-sm mx-auto">
-                When you archive older prayers from the public wall or rotate them off the Sunday bulletin list, they will appear here.
+                When you archive older prayers from the public wall or rotate them off the printable prayer list, they will appear here.
               </p>
             </div>
           ) : (
@@ -918,7 +918,7 @@ export const StaffModerationPortal: React.FC = () => {
                         {req.isArchivedFromPrint && (
                           <span className="bg-stone-100 text-stone-800 font-bold px-2 py-0.5 rounded text-[10px] flex items-center gap-1">
                             <Printer className="w-3 h-3 text-stone-600" />
-                            Bulletin Print Archived
+                            Prayer List Archived
                           </span>
                         )}
                         <span className="text-stone-400">•</span>
@@ -956,10 +956,10 @@ export const StaffModerationPortal: React.FC = () => {
                         <button
                           onClick={() => togglePrintArchived(req.id)}
                           className="px-3 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-800 rounded-lg text-xs font-bold border border-stone-300 flex items-center gap-1 transition-colors cursor-pointer"
-                          title="Restore this prayer back into this Sunday's active bulletin print list"
+                          title="Restore this prayer back onto this week's printable prayer list"
                         >
                           <Printer className="w-3.5 h-3.5 text-stone-600" />
-                          <span>Restore to Bulletin</span>
+                          <span>Restore to Prayer List</span>
                         </button>
                       )}
                     </div>
@@ -999,7 +999,7 @@ export const StaffModerationPortal: React.FC = () => {
                 <span>Church Logo & Branding</span>
               </label>
               <span className="text-[11px] text-stone-400">
-                Shown in Prayer Wall header, Sunday printed bulletins, and directory
+                Shown in the Prayer Wall header, printable prayer list, and directory
               </span>
             </div>
 

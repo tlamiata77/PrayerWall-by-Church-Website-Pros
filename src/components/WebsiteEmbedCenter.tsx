@@ -23,7 +23,7 @@ export const WebsiteEmbedCenter: React.FC = () => {
   const [copied, setCopied] = useState(false);
 
   const embedUrl = `${window.location.origin}/embed/${currentChurch.slug}?mode=${embedMode}&theme=${currentChurch.themeColor}`;
-  const iframeSnippet = `<iframe\n  src="${embedUrl}"\n  width="100%"\n  height="780"\n  frameborder="0"\n  style="border: none; border-radius: 16px; width: 100%; min-height: 780px;"\n  title="${currentChurch.name} Community Prayer Wall"\n></iframe>`;
+  const iframeSnippet = `<iframe\n  src="${embedUrl}"\n  width="100%"\n  height="780"\n  frameborder="0"\n  allow="microphone"\n  style="border: none; border-radius: 16px; width: 100%; min-height: 780px;"\n  title="${currentChurch.name} Community Prayer Wall"\n></iframe>`;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(iframeSnippet);
@@ -144,6 +144,10 @@ export const WebsiteEmbedCenter: React.FC = () => {
             <pre className="bg-stone-950 p-3.5 rounded-xl text-emerald-400 font-mono text-xs overflow-x-auto border border-stone-800 leading-relaxed">
               {iframeSnippet}
             </pre>
+            <p className="text-[11px] text-stone-400 leading-snug">
+              <code className="text-emerald-400">allow="microphone"</code> lets visitors speak their prayer instead of typing.
+              Already embedded the prayer wall before November 2026? Paste this code again to turn voice dictation on.
+            </p>
           </div>
 
           <div className="bg-stone-800/60 rounded-xl p-3 text-xs text-stone-300 flex items-center justify-between gap-2">

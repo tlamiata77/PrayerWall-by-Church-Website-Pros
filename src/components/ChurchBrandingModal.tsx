@@ -188,7 +188,7 @@ export const ChurchBrandingModal: React.FC<ChurchBrandingModalProps> = ({
                     <span>Church Logo</span>
                   </label>
                   <span className="text-[11px] text-stone-400">
-                    Appears in Prayer Wall header, Sunday bulletins, and directory
+                    Appears in the Prayer Wall header, printable prayer list, and directory
                   </span>
                 </div>
 
@@ -575,7 +575,7 @@ export const ChurchBrandingModal: React.FC<ChurchBrandingModalProps> = ({
               <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 space-y-3 text-xs">
                 <span className="font-bold text-stone-900 block flex items-center gap-1.5">
                   <MapPin className="w-4 h-4 text-[#4eb8b9]" />
-                  <span>Physical Church Address (for Directory & Sunday Bulletin Header)</span>
+                  <span>Physical Church Address (for Directory & Printable Prayer List Header)</span>
                 </span>
 
                 <div className="space-y-1">
@@ -653,7 +653,7 @@ export const ChurchBrandingModal: React.FC<ChurchBrandingModalProps> = ({
               </div>
 
               <div className="space-y-1">
-                <label className="font-semibold text-stone-700">Sunday Bulletin Printed Sheet Title</label>
+                <label className="font-semibold text-stone-700">Printable Prayer List Title</label>
                 <input
                   type="text"
                   value={formData.bulletinTitle || ''}
