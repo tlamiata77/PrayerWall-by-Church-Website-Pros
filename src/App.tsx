@@ -15,6 +15,7 @@ import { WebsiteEmbedCenter } from './components/WebsiteEmbedCenter';
 import { SubmitPrayerModal } from './components/SubmitPrayerModal';
 import { ChurchDirectory } from './components/ChurchDirectory';
 import { MemberPrayerHistory } from './components/MemberPrayerHistory';
+import { WeeklyPrayerList } from './components/WeeklyPrayerList';
 import { AuthModal } from './components/AuthModal';
 import { ImportPrayersModal } from './components/ImportPrayersModal';
 import { SetNewPasswordModal } from './components/SetNewPasswordModal';
@@ -32,6 +33,7 @@ const MainContent: React.FC = () => {
     clearDataError,
     currentChurch,
     currentUser,
+    setActiveTab,
   } = useApp();
 
   const isPastorOrStaff = activeRole === 'church_staff' || activeRole === 'super_admin';
@@ -90,6 +92,7 @@ const MainContent: React.FC = () => {
       {!isLoading && activeTab === 'staff' && (isPastorOrStaff ? <StaffModerationPortal /> : <PrayerWall />)}
       {!isLoading && activeTab === 'directory' && <ChurchDirectory />}
       {!isLoading && activeTab === 'my-prayers' && <MemberPrayerHistory />}
+      {!isLoading && activeTab === 'prayer-list' && <WeeklyPrayerList onBack={() => setActiveTab('wall')} />}
       {!isLoading && activeTab === 'global' && (isPastorOrStaff ? <GlobalPrayerWall /> : <PrayerWall />)}
       {!isLoading && activeTab === 'embed' && (isPastorOrStaff || isEmbedSimulator ? <WebsiteEmbedCenter /> : <PrayerWall />)}
 
