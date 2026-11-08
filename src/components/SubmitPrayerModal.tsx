@@ -254,7 +254,7 @@ export const SubmitPrayerModal: React.FC = () => {
             </div>
             <div>
               <h2 className="font-serif-church text-base sm:text-lg font-bold">
-                Share a Prayer Request
+                Submit a Prayer Request
               </h2>
               <p className="text-[11px] sm:text-xs text-stone-400 line-clamp-1">
                 {currentChurch.name} • How can our church family pray for you?
@@ -645,7 +645,7 @@ export const SubmitPrayerModal: React.FC = () => {
                 ) : (
                   <>
                     <Heart className="w-4 h-4 fill-white" />
-                    <span>Share Prayer Request</span>
+                    <span>Submit a Prayer Request</span>
                   </>
                 )}
               </button>
