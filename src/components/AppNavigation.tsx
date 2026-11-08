@@ -6,6 +6,7 @@ import { ChurchBrandingModal } from './ChurchBrandingModal';
 import { PrayingHands } from './icons/PrayingHands';
 import {
   Printer,
+  ListChecks,
   ShieldCheck,
   Globe,
   Code,
@@ -53,13 +54,18 @@ export const AppNavigation: React.FC = () => {
   // Check if current active account/persona is Pastor or Staff (or Super Admin)
   const isPastorOrStaff = activeRole === 'church_staff' || activeRole === 'super_admin';
   const isEmbedSimulator = activeRole === 'embed_view';
+  // Approved members of this church can view and print this week's prayer list
+  // (pastors and staff use the fuller Print List tab)
+  const isMemberHere = Boolean(currentUser?.approved && currentUser.churchId === currentChurch.id);
+  const canSeeWeeklyList = isMemberHere && !isPastorOrStaff;
 
   // Automatically ensure church members do not stay on staff/pastor-only tabs
   useEffect(() => {
     if (!isPastorOrStaff && !isEmbedSimulator && (activeTab === 'bulletin' || activeTab === 'staff' || activeTab === 'global' || activeTab === 'embed')) {
       setActiveTab('wall');
     }
-  }, [isPastorOrStaff, isEmbedSimulator, activeTab, setActiveTab]);
+    if (activeTab === 'prayer-list' && !canSeeWeeklyList) setActiveTab('wall');
+  }, [isPastorOrStaff, isEmbedSimulator, canSeeWeeklyList, activeTab, setActiveTab]);
 
   // Close the account menu on an outside tap
   useEffect(() => {
@@ -76,6 +82,7 @@ export const AppNavigation: React.FC = () => {
 
   const tabs: Array<{ id: AppTab; label: string; icon: React.ReactNode; badge?: number; show: boolean }> = [
     { id: 'wall', label: 'Prayer Wall', icon: <HeartHandshake className="w-4 h-4" />, show: true },
+    { id: 'prayer-list', label: 'Prayer List', icon: <ListChecks className="w-4 h-4" />, show: canSeeWeeklyList },
     { id: 'directory', label: 'Directory', icon: <Users className="w-4 h-4" />, show: true },
     { id: 'my-prayers', label: 'My Prayers', icon: <PrayingHands className="w-4 h-4" />, badge: userSubmissionsCount, show: true },
     { id: 'bulletin', label: 'Print List', icon: <Printer className="w-4 h-4" />, show: isPastorOrStaff },

@@ -24,7 +24,7 @@ export interface ModerationDetails {
   crisisAssistanceDetected?: boolean;
 }
 
-export type AppTab = 'wall' | 'bulletin' | 'staff' | 'directory' | 'my-prayers' | 'global' | 'embed';
+export type AppTab = 'wall' | 'prayer-list' | 'bulletin' | 'staff' | 'directory' | 'my-prayers' | 'global' | 'embed';
 
 export interface PrayerRequest {
   id: string;

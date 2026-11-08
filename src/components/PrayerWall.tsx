@@ -539,7 +539,7 @@ export const PrayerWall: React.FC<PrayerWallProps> = ({ forceSingleColumn = fals
               setFilterAnsweredOnly(false);
             }}
           >
-            All
+            All ({visibleCountBase.length})
           </button>
           {urgentCount > 0 && (
             <button className={chip(filterUrgentOnly)} style={chipStyle(filterUrgentOnly)} onClick={() => setFilterUrgentOnly((v) => !v)}>
@@ -558,7 +558,7 @@ export const PrayerWall: React.FC<PrayerWallProps> = ({ forceSingleColumn = fals
               style={chipStyle(selectedCategory === cat)}
               onClick={() => setSelectedCategory(selectedCategory === cat ? 'All' : cat)}
             >
-              {cat}
+              {cat} ({visibleCountBase.filter((r) => r.category === cat).length})
             </button>
           ))}
         </div>
