@@ -134,7 +134,7 @@ export const EditPrayerModal: React.FC<EditPrayerModalProps> = ({ request, onClo
           </div>
 
           <div>
-            <label className={label}>Bulletin line (what prints on the Sunday flyer)</label>
+            <label className={label}>Prayer list line (what prints on the printable prayer list)</label>
             <input
               className={input}
               value={form.bulletinSummary || ''}

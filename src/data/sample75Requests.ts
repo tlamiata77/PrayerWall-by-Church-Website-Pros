@@ -3,7 +3,7 @@ import { PrayerRequest } from '../types';
 /**
  * 75 Realistic Weekly Church Prayer Requests
  * Designed specifically for high-volume church ministries to demonstrate
- * ultra-compact 3-column, tabular ledger, and continuous flow bulletin printouts.
+ * ultra-compact 3-column, tabular ledger, and continuous flow prayer list printouts.
  */
 export const SAMPLE_75_WEEKLY_REQUESTS: PrayerRequest[] = [
   // Health & Healing (Surgeries, Illness, Recovery) - 25 items

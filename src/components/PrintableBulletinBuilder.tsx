@@ -41,7 +41,7 @@ type PaperSize = 'letter' | 'legal' | 'half_letter';
 const PAPER_SIZES: Record<PaperSize, { label: string; width: number; height: number; margin: number }> = {
   letter: { label: 'Letter 8.5 × 11"', width: 8.5, height: 11, margin: 0.5 },
   legal: { label: 'Legal 8.5 × 14"', width: 8.5, height: 14, margin: 0.5 },
-  half_letter: { label: 'Bulletin insert 5.5 × 8.5"', width: 5.5, height: 8.5, margin: 0.35 },
+  half_letter: { label: 'Half letter 5.5 × 8.5"', width: 5.5, height: 8.5, margin: 0.35 },
 };
 
 export const PrintableBulletinBuilder: React.FC = () => {
@@ -156,7 +156,7 @@ export const PrintableBulletinBuilder: React.FC = () => {
       setUseCondensedSummaries(true);
       setIncludePrivateRequests(false);
       setIncludeContactInfo(false);
-      setCustomTitle(`${currentChurch.name} Sunday Prayer Bulletin`);
+      setCustomTitle(`${currentChurch.name} Prayer List`);
     } else if (preset === 'pastoral_care') {
       setLayoutMode('table_ledger');
       setFontSize('compact');
@@ -360,7 +360,7 @@ export const PrintableBulletinBuilder: React.FC = () => {
     setTimeout(() => window.print(), 50);
   };
 
-  // AI Auto-Categorize Bulletin
+  // AI Auto-Categorize the prayer list
   const handleAICategorizeBulletin = async () => {
     setIsPolishingAI(true);
     try {
@@ -413,7 +413,7 @@ export const PrintableBulletinBuilder: React.FC = () => {
     }
   };
 
-  // Copy Formatted Text for Word / Email Bulletin
+  // Copy Formatted Text for Word / Email
   const handleCopyText = () => {
     let text = `========================================================\n`;
     text += `${customTitle.toUpperCase()}\n`;
@@ -497,14 +497,14 @@ export const PrintableBulletinBuilder: React.FC = () => {
             <div className="flex items-center gap-2">
               <Zap className="w-5 h-5 text-amber-400" />
               <h2 className="font-serif-church text-xl font-bold text-white">
-                High-Volume Bulletin Optimizer (75+ Weekly Requests)
+                High-Volume Prayer List Optimizer (75+ Weekly Requests)
               </h2>
               <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full border ${pageFit.color}`}>
                 {pageFit.badge}
               </span>
             </div>
             <p className="text-xs text-stone-400">
-              {pageFit.text}. Specially formatted so that 75+ church prayer requests easily fit onto a 1-page or 2-page double-sided Sunday bulletin insert.
+              {pageFit.text}. Specially formatted so that 75+ church prayer requests easily fit onto a 1-page or 2-page double-sided printable prayer list.
             </p>
           </div>
 
@@ -566,18 +566,18 @@ export const PrintableBulletinBuilder: React.FC = () => {
               <span>{isPolishingAI ? 'AI Compressing...' : '⚡ AI 1-Liners'}</span>
             </button>
 
-            {/* AI Auto-Categorize Bulletin */}
+            {/* AI Auto-Categorize the prayer list */}
             <button
               onClick={handleAICategorizeBulletin}
               disabled={isPolishingAI || isAICategorizing}
               className="flex items-center gap-1.5 px-3.5 py-1.5 bg-amber-700 hover:bg-amber-600 text-white rounded-lg text-xs font-bold transition-all cursor-pointer shadow-sm disabled:opacity-50"
-              title="AI organizes and categorizes all requests on this bulletin into their ministry categories"
+              title="AI organizes and categorizes all requests on this prayer list into their ministry categories"
             >
               <Sparkles className={`w-3.5 h-3.5 ${isPolishingAI || isAICategorizing ? 'animate-spin' : ''}`} />
               <span>{isPolishingAI || isAICategorizing ? 'Categorizing...' : '✨ AI Organize Categories'}</span>
             </button>
 
-            {/* Copy for Bulletin */}
+            {/* Copy for prayer list */}
             <button
               onClick={handleCopyText}
               className="flex items-center gap-1.5 px-3.5 py-1.5 bg-stone-800 hover:bg-stone-700 text-stone-200 rounded-lg text-xs font-semibold border border-stone-700 transition-colors cursor-pointer"
@@ -591,20 +591,20 @@ export const PrintableBulletinBuilder: React.FC = () => {
             <button
               onClick={handleDownloadPDF}
               className="flex items-center gap-2 px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold shadow-md transition-all cursor-pointer"
-              title="Save this Sunday Bulletin as a PDF file (choose &quot;Save as PDF&quot; in the print window)"
+              title="Save this prayer list as a PDF file (choose &quot;Save as PDF&quot; in the print window)"
             >
               <Download className="w-4 h-4" />
               <span>Save as PDF</span>
             </button>
 
-            {/* Print Bulletin */}
+            {/* Print prayer list */}
             <button
               onClick={handlePrint}
               className="flex items-center gap-2 px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold shadow-md transition-all cursor-pointer"
               title="Open browser print dialog / save as PDF"
             >
               <Printer className="w-4 h-4" />
-              <span>Print Bulletin</span>
+              <span>Print Prayer List</span>
             </button>
           </div>
         </div>
@@ -638,7 +638,7 @@ export const PrintableBulletinBuilder: React.FC = () => {
                     Archive Last Week's Prayers (Print Only)
                   </h3>
                   <p className="text-xs text-stone-400">
-                    Keep your printed Sunday bulletin concise and fresh
+                    Keep your printable prayer list concise and fresh
                   </p>
                 </div>
               </div>
@@ -649,7 +649,7 @@ export const PrintableBulletinBuilder: React.FC = () => {
                   <span>Important Note on Church Wall Safety:</span>
                 </div>
                 <p>
-                  Archiving here <strong>only rotates requests off the Sunday printed bulletin</strong>.
+                  Archiving here <strong>only rotates requests off the printable prayer list</strong>.
                   These prayers will <strong>never</strong> be deleted from your church website's prayer wall — congregation members and online visitors can continue praying for them anytime!
                 </p>
               </div>
@@ -683,7 +683,7 @@ export const PrintableBulletinBuilder: React.FC = () => {
                     }`}
                   >
                     <div className="text-xs font-bold">Older than 14 days</div>
-                    <div className="text-[11px] text-stone-400 mt-0.5">Bi-weekly bulletin rotation</div>
+                    <div className="text-[11px] text-stone-400 mt-0.5">Bi-weekly prayer list rotation</div>
                   </button>
 
                   <button
@@ -696,7 +696,7 @@ export const PrintableBulletinBuilder: React.FC = () => {
                     }`}
                   >
                     <div className="text-xs font-bold">All current items</div>
-                    <div className="text-[11px] text-stone-400 mt-0.5">Clear entire bulletin set</div>
+                    <div className="text-[11px] text-stone-400 mt-0.5">Clear the entire prayer list</div>
                   </button>
                 </div>
               </div>
@@ -714,13 +714,13 @@ export const PrintableBulletinBuilder: React.FC = () => {
                   onClick={() => {
                     const count = archiveLastWeeksPrayersForPrint(archiveDaysSelection);
                     setShowArchivePrintModal(false);
-                    setArchiveFeedback(`Archived ${count} requests from the Sunday bulletin! (They remain active on your church website prayer wall).`);
+                    setArchiveFeedback(`Archived ${count} requests from the printable prayer list! (They remain active on your church website prayer wall).`);
                     setTimeout(() => setArchiveFeedback(null), 5000);
                   }}
                   className="px-5 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold cursor-pointer transition-all shadow-md flex items-center gap-1.5"
                 >
                   <Archive className="w-4 h-4" />
-                  <span>Archive from Bulletin Now</span>
+                  <span>Archive from Prayer List Now</span>
                 </button>
               </div>
             </div>
@@ -748,7 +748,7 @@ export const PrintableBulletinBuilder: React.FC = () => {
           <div className="bg-emerald-950/80 border border-emerald-500/50 text-emerald-200 text-xs px-3.5 py-2 rounded-xl flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-emerald-400" />
             <span>
-              Successfully compressed {aiCompressedCount} prayer requests into clean, high-density 1-line bulletin entries!
+              Successfully compressed {aiCompressedCount} prayer requests into clean, high-density 1-line prayer list entries!
             </span>
           </div>
         )}
@@ -789,19 +789,19 @@ export const PrintableBulletinBuilder: React.FC = () => {
               onClick={() => {
                 restoreAllPrintArchives();
                 setPrintViewMode('active');
-                setArchiveFeedback(`Restored ${totalArchivedPrintCount} archived prayers back to the active Sunday bulletin!`);
+                setArchiveFeedback(`Restored ${totalArchivedPrintCount} archived prayers back to the printable prayer list!`);
                 setTimeout(() => setArchiveFeedback(null), 4000);
               }}
               className="text-xs text-purple-700 hover:text-purple-900 font-bold flex items-center gap-1.5 bg-purple-50 px-3 py-1.5 rounded-lg border border-purple-200 transition-colors cursor-pointer"
             >
               <RotateCcw className="w-3.5 h-3.5" />
-              <span>Restore All to Active Bulletin</span>
+              <span>Restore All to Prayer List</span>
             </button>
           )}
 
           {printViewMode === 'active' && (
             <span className="text-[11px] text-stone-500">
-              Showing <strong>{printableRequests.length}</strong> prayers queued for this Sunday's bulletin
+              Showing <strong>{printableRequests.length}</strong> prayers queued for this week's printable prayer list
             </span>
           )}
         </div>
@@ -896,7 +896,7 @@ export const PrintableBulletinBuilder: React.FC = () => {
             >
               <div className="flex items-center gap-1.5">
                 <Columns2 className="w-4 h-4 text-stone-600 shrink-0" />
-                <span className="leading-tight">2-Col Bulletin</span>
+                <span className="leading-tight">2-Col List</span>
               </div>
               <span className="text-[10px] text-stone-500 font-normal mt-1 block">
                 Standard format
@@ -1197,7 +1197,7 @@ export const PrintableBulletinBuilder: React.FC = () => {
               type="text"
               value={customTitle}
               onChange={(e) => setCustomTitle(e.target.value)}
-              placeholder="Bulletin Header Title"
+              placeholder="Prayer List Title"
               className="w-full bg-stone-50 border border-stone-300 rounded px-2 py-1 text-xs"
             />
 
@@ -1385,7 +1385,7 @@ export const PrintableBulletinBuilder: React.FC = () => {
                         <button
                           onClick={() => togglePrintArchived(item.id)}
                           className="opacity-0 group-hover:opacity-100 p-0.5 text-stone-400 hover:text-purple-700 transition-opacity cursor-pointer"
-                          title={item.isArchivedFromPrint ? "Restore to active bulletin" : "Archive from print (keeps on wall)"}
+                          title={item.isArchivedFromPrint ? "Restore to the printable prayer list" : "Archive from print (keeps on wall)"}
                         >
                           {item.isArchivedFromPrint ? <RotateCcw className="w-3 h-3 text-purple-600" /> : <Archive className="w-3 h-3" />}
                         </button>
@@ -1497,7 +1497,7 @@ export const PrintableBulletinBuilder: React.FC = () => {
                           <button
                             onClick={() => togglePrintArchived(item.id)}
                             className="no-print opacity-0 group-hover:opacity-100 transition-opacity p-0.5 text-stone-400 hover:text-purple-700 cursor-pointer shrink-0"
-                            title={item.isArchivedFromPrint ? "Restore to active bulletin" : "Archive from this print set (keeps on prayer wall)"}
+                            title={item.isArchivedFromPrint ? "Restore to the printable prayer list" : "Archive from this print set (keeps on prayer wall)"}
                           >
                             {item.isArchivedFromPrint ? (
                               <RotateCcw className="w-3 h-3 text-purple-600" />

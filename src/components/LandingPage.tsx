@@ -32,8 +32,8 @@ const FEATURES = [
   },
   {
     icon: Printer,
-    title: 'Sunday bulletin builder',
-    text: 'Turn the week’s requests into a clean printed prayer list in one click. Letter, legal or bulletin-insert size, tall or wide, color or black ink.',
+    title: 'Printable prayer list',
+    text: 'Turn the week’s requests into a clean printed prayer list in one click. Letter, legal or half-letter size, tall or wide, color or black ink.',
   },
   {
     icon: ShieldCheck,
@@ -98,7 +98,7 @@ const FAQ = [
   },
   {
     q: 'Can more than one person manage our church?',
-    a: 'Yes. The pastor who registers can give staff access to other leaders, who can then review requests, print bulletins and approve members.',
+    a: 'Yes. The pastor who registers can give staff access to other leaders, who can then review requests, print prayer lists and approve members.',
   },
   {
     q: 'Do we need a website to use it?',
@@ -244,7 +244,7 @@ export const LandingPage: React.FC = () => {
         </div>
       </section>
 
-      {/* Bulletin highlight */}
+      {/* Printable prayer list highlight */}
       <section className="bg-[#1d1e33] text-stone-100">
         <div className="max-w-6xl mx-auto px-4 py-16 sm:py-20 grid lg:grid-cols-2 gap-10 items-center">
           <div>
@@ -256,11 +256,11 @@ export const LandingPage: React.FC = () => {
             </h2>
             <p className="mt-4 text-stone-300 text-lg leading-relaxed">
               No more retyping requests into a Word document every Saturday night. PrayerKeeper organizes the week’s
-              needs by category and prints a clean, readable sheet for your bulletin or prayer meeting.
+              needs by category and prints a clean, readable sheet for Sunday or your prayer meeting.
             </p>
             <ul className="mt-6 space-y-2.5 text-stone-200">
               {[
-                'Letter, legal or 5.5 × 8.5" bulletin-insert size',
+                'Letter, legal or 5.5 × 8.5" half-letter size',
                 'Tall or wide pages; columns adjust automatically',
                 'Full color with your church colors, or black ink only',
                 'Rotate last week’s requests off the sheet without deleting them',
@@ -361,7 +361,7 @@ export const LandingPage: React.FC = () => {
           <ul className="mt-6 space-y-2.5 text-left text-stone-700 max-w-sm mx-auto">
             {[
               'Unlimited prayer requests and members',
-              'Sunday bulletin builder and printing',
+              'Printable prayer list',
               'Pastoral review queue and private vault',
               'Member accounts and photo directory',
               'Website embed and your own branding',

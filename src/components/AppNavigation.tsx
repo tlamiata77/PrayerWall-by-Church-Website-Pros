@@ -1,28 +1,24 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
-import { UserRole } from '../types';
+import { AppTab } from '../types';
 import { getChurchTheme } from '../utils/theme';
 import { ChurchBrandingModal } from './ChurchBrandingModal';
 import { PrayingHands } from './icons/PrayingHands';
 import {
-  HeartHandshake,
   Printer,
   ShieldCheck,
   Globe,
   Code,
-  PlusCircle,
+  Plus,
   Church as ChurchIcon,
   Crown,
   User,
-  Sparkles,
   ChevronDown,
   Users,
   LogOut,
-  KeyRound,
-  Lock,
-  UserCheck,
-  ChevronUp,
-  Palette
+  LogIn,
+  Palette,
+  HeartHandshake,
 } from 'lucide-react';
 
 export const AppNavigation: React.FC = () => {
@@ -48,8 +44,9 @@ export const AppNavigation: React.FC = () => {
 
   const unreadNotifications = notifications.filter((n) => !n.readAt).length;
 
-  const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [brandingModalOpen, setBrandingModalOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const currentTheme = getChurchTheme(currentChurch);
 
@@ -64,322 +61,198 @@ export const AppNavigation: React.FC = () => {
     }
   }, [isPastorOrStaff, isEmbedSimulator, activeTab, setActiveTab]);
 
+  // Close the account menu on an outside tap
+  useEffect(() => {
+    if (!menuOpen) return;
+    const close = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [menuOpen]);
+
   // Number of prayers submitted by current user
   const userSubmissionsCount = currentUser ? requests.filter((r) => r.userId === currentUser.id).length : 0;
 
+  const tabs: Array<{ id: AppTab; label: string; icon: React.ReactNode; badge?: number; show: boolean }> = [
+    { id: 'wall', label: 'Prayer Wall', icon: <HeartHandshake className="w-4 h-4" />, show: true },
+    { id: 'directory', label: 'Directory', icon: <Users className="w-4 h-4" />, show: true },
+    { id: 'my-prayers', label: 'My Prayers', icon: <PrayingHands className="w-4 h-4" />, badge: userSubmissionsCount, show: true },
+    { id: 'bulletin', label: 'Print List', icon: <Printer className="w-4 h-4" />, show: isPastorOrStaff },
+    {
+      id: 'staff',
+      label: activeRole === 'super_admin' && !isImpersonating ? 'Super Admin' : 'Staff',
+      icon: <ShieldCheck className="w-4 h-4" />,
+      badge: flaggedRequests.length,
+      show: isPastorOrStaff,
+    },
+    { id: 'global', label: 'Global Wall', icon: <Globe className="w-4 h-4" />, show: isPastorOrStaff },
+    { id: 'embed', label: 'Embed Code', icon: <Code className="w-4 h-4" />, show: isPastorOrStaff || isEmbedSimulator },
+  ];
+
+  const previewRoles = [
+    { role: 'super_admin' as const, label: 'Super Admin', icon: <Crown className="w-3.5 h-3.5" />, tab: 'staff' as AppTab },
+    { role: 'church_staff' as const, label: 'Pastor / Staff', icon: <ShieldCheck className="w-3.5 h-3.5" /> },
+    { role: 'congregation_member' as const, label: 'Member', icon: <User className="w-3.5 h-3.5" /> },
+    { role: 'embed_view' as const, label: 'Embed', icon: <Code className="w-3.5 h-3.5" />, tab: 'embed' as AppTab },
+  ];
+
+  const menuItem =
+    'w-full text-left px-3 py-2.5 text-sm font-medium text-stone-700 hover:bg-stone-50 rounded-lg flex items-center gap-2.5 cursor-pointer';
+
   return (
-    <header className="bg-white border-b border-stone-200 sm:sticky sm:top-0 z-40 shadow-xs no-print">
-      {/* Top Meta Bar: Church Website Pros Branding & Persona Switcher */}
-      <div className="bg-stone-900 text-stone-300 text-xs px-4 py-2 border-b border-stone-800">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <a href="/" className="flex items-center gap-1.5 font-semibold text-stone-100 tracking-wide hover:text-white" title="PrayerKeeper home">
-              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              Church Website Pros
-            </a>
-            <span className="text-stone-500">•</span>
-            <span className="text-stone-400 hidden sm:inline">
-              PrayerKeeper by Church Website Pros
-            </span>
-          </div>
-
-          {/* Super admin preview: see the app as a pastor, member, or embedded wall */}
-          {isSuperAdmin && (
-          <div className="flex items-center gap-2 max-w-full overflow-x-auto pb-0.5 sm:pb-0">
-            <span className="text-stone-400 text-[11px] hidden md:inline shrink-0">Preview as:</span>
-            <div className="bg-stone-800 p-0.5 rounded-lg flex items-center gap-0.5 border border-stone-700 shrink-0">
-              <button
-                onClick={() => {
-                  setActiveRole('super_admin');
-                  setActiveTab('staff');
-                }}
-                className={`px-2.5 py-1 rounded text-xs flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
-                  activeRole === 'super_admin' && !isImpersonating
-                    ? 'bg-amber-500 text-stone-950 font-bold shadow-xs'
-                    : 'text-stone-300 hover:text-white hover:bg-stone-700/50'
-                }`}
-                title="Super Admin Dashboard with Multi-Church Oversight and Login-As"
+    <header className="bg-white border-b border-stone-200 sticky top-0 z-40 no-print">
+      {/* Super admin only: switch church and preview the app as another role */}
+      {isSuperAdmin && (
+        <div className="bg-stone-900 text-stone-300 text-xs">
+          <div className="max-w-6xl mx-auto px-3 sm:px-4 py-1.5 flex items-center gap-2 overflow-x-auto">
+            <div className="relative shrink-0">
+              <select
+                value={currentChurchId}
+                onChange={(e) => setCurrentChurchId(e.target.value)}
+                className="max-w-[170px] sm:max-w-[240px] truncate appearance-none bg-stone-800 text-stone-100 text-xs font-semibold rounded-md pl-2 pr-6 py-1 border border-stone-700 cursor-pointer focus:outline-none"
+                title="Switch church"
               >
-                <Crown className="w-3.5 h-3.5" />
-                <span className="font-medium">Super Admin</span>
-                {unreadNotifications > 0 && (
-                  <span className="bg-rose-500 text-white text-[9px] font-bold px-1.5 rounded-full">
-                    {unreadNotifications}
-                  </span>
-                )}
-              </button>
-
-              <button
-                onClick={() => {
-                  setActiveRole('church_staff');
-                  if (activeTab === 'global' && activeRole === 'super_admin') {
-                    setActiveTab('wall');
-                  }
-                }}
-                className={`px-2.5 py-1 rounded text-xs flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
-                  activeRole === 'church_staff'
-                    ? 'bg-amber-500 text-stone-950 font-bold shadow-xs'
-                    : 'text-stone-300 hover:text-white hover:bg-stone-700/50'
-                }`}
-                title="Church Pastor & Staff Portal: Review private requests, moderate, generate Sunday bulletin"
-              >
-                <ShieldCheck className="w-3.5 h-3.5" />
-                <span className="font-medium">Pastor / Staff</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  setActiveRole('congregation_member');
-                }}
-                className={`px-2.5 py-1 rounded text-xs flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
-                  activeRole === 'congregation_member'
-                    ? 'bg-amber-500 text-stone-950 font-bold shadow-xs'
-                    : 'text-stone-300 hover:text-white hover:bg-stone-700/50'
-                }`}
-                title="Public Church Member & Visitor: View wall, pray for requests, track and resubmit submitted prayers"
-              >
-                <User className="w-3.5 h-3.5" />
-                <span className="font-medium">Church Member</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  setActiveRole('embed_view');
-                  setActiveTab('embed');
-                }}
-                className={`px-2.5 py-1 rounded text-xs flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
-                  activeRole === 'embed_view'
-                    ? 'bg-amber-500 text-stone-950 font-bold shadow-xs'
-                    : 'text-stone-300 hover:text-white hover:bg-stone-700/50'
-                }`}
-                title="Simulate how PrayerKeeper looks embedded on a client church website"
-              >
-                <Code className="w-3.5 h-3.5" />
-                <span className="font-medium">Embed Simulator</span>
-              </button>
+                {churches.map((church) => (
+                  <option key={church.id} value={church.id}>
+                    {church.name}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="w-3.5 h-3.5 text-stone-400 absolute right-1.5 top-1.5 pointer-events-none" />
+            </div>
+            <span className="text-stone-500 shrink-0 hidden sm:inline">Preview as</span>
+            <div className="flex items-center gap-0.5 shrink-0">
+              {previewRoles.map((p) => (
+                <button
+                  key={p.role}
+                  onClick={() => {
+                    setActiveRole(p.role);
+                    if (p.tab) setActiveTab(p.tab);
+                    else if (activeTab === 'global' && p.role !== 'church_staff') setActiveTab('wall');
+                  }}
+                  className={`px-2 py-1 rounded flex items-center gap-1 cursor-pointer shrink-0 ${
+                    activeRole === p.role && !(p.role === 'super_admin' && isImpersonating)
+                      ? 'bg-amber-500 text-stone-950 font-bold'
+                      : 'text-stone-300 hover:text-white hover:bg-stone-800'
+                  }`}
+                >
+                  {p.icon}
+                  <span>{p.label}</span>
+                  {p.role === 'super_admin' && unreadNotifications > 0 && (
+                    <span className="bg-rose-500 text-white text-[9px] font-bold px-1.5 rounded-full">{unreadNotifications}</span>
+                  )}
+                </button>
+              ))}
             </div>
           </div>
-          )}
         </div>
-      </div>
+      )}
 
-      {/* Main Church Header & Nav Tabs */}
-      <div className="max-w-7xl mx-auto px-4 py-3">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          {/* Church Branding & Selector */}
-          <div className="flex items-center gap-3 min-w-0 max-w-full">
-            {currentChurch.logoUrl ? (
-              <img
-                src={currentChurch.logoUrl}
-                alt={`${currentChurch.name} logo`}
-                className="w-10 h-10 rounded-xl object-cover border border-stone-200 shadow-xs bg-white shrink-0"
-              />
-            ) : (
-              <div
-                className="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-lg shadow-xs border shrink-0 text-white"
-                style={{ backgroundColor: currentTheme.primary }}
-              >
-                <ChurchIcon className="w-6 h-6" />
-              </div>
-            )}
-
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap min-w-0">
-                <h1 className="font-serif-church text-lg sm:text-xl font-bold text-stone-900 tracking-tight break-words min-w-0">
-                  {currentChurch.name}
-                </h1>
-
-                {/* Church Switcher Dropdown (registering is the separate button next to it) */}
-                {churches.length > 0 && (
-                <div className="relative inline-block">
-                  <select
-                    value={currentChurchId}
-                    onChange={(e) => setCurrentChurchId(e.target.value)}
-                    className="max-w-[220px] sm:max-w-xs truncate appearance-none bg-stone-100 hover:bg-stone-200/80 text-stone-700 text-xs font-semibold rounded-md pl-2 pr-6 py-1 border border-stone-300/80 cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#4eb8b9]"
-                    title="Switch church"
-                  >
-                    {churches.map((church) => (
-                      <option key={church.id} value={church.id}>
-                        {church.name}{church.city ? ` (${church.city}, ${church.state})` : ''}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="w-3.5 h-3.5 text-stone-500 absolute right-1.5 top-2 pointer-events-none" />
-                </div>
-                )}
-
-                {/* Quick Register New Church Button */}
-                <button
-                  onClick={() => openLoginModal(undefined, 'register_church')}
-                  className="flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-lg border border-amber-300/90 bg-amber-50 hover:bg-amber-100/80 text-amber-900 transition-colors cursor-pointer"
-                  title="Sign up and register a new church"
-                >
-                  <ChurchIcon className="w-3.5 h-3.5 text-amber-600" />
-                  <span className="hidden sm:inline">+ Register Church</span>
-                </button>
-
-                {/* Quick Branding & Theme Edit Shortcut for Staff */}
-                {(activeRole === 'church_staff' || activeRole === 'super_admin') && (
-                  <button
-                    onClick={() => setBrandingModalOpen(true)}
-                    className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg border border-stone-200 bg-stone-50 hover:bg-stone-100 text-stone-700 transition-colors cursor-pointer"
-                    title="Edit Church Logo, Address, Contact Info and Color Theme"
-                  >
-                    <Palette className="w-3.5 h-3.5" style={{ color: currentTheme.primary }} />
-                    <span className="hidden sm:inline">Branding & Colors</span>
-                  </button>
-                )}
-              </div>
-
-              <p className="text-xs text-stone-500 hidden sm:block">
-                {[
-                  currentChurch.tagline,
-                  currentChurch.pastorName,
-                  [currentChurch.city, currentChurch.state].filter(Boolean).join(', '),
-                ]
-                  .filter(Boolean)
-                  .join(' • ')}
-              </p>
+      <div className="max-w-6xl mx-auto px-3 sm:px-4">
+        {/* Church name and account */}
+        <div className="flex items-center gap-3 h-14 sm:h-16">
+          {currentChurch.logoUrl ? (
+            <img
+              src={currentChurch.logoUrl}
+              alt=""
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl object-cover border border-stone-200 bg-white shrink-0"
+            />
+          ) : (
+            <div
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center shrink-0 text-white"
+              style={{ backgroundColor: currentTheme.primary }}
+            >
+              <ChurchIcon className="w-5 h-5" />
             </div>
+          )}
+
+          <div className="min-w-0 flex-1">
+            <h1 className="font-serif-church text-base sm:text-xl font-bold text-stone-900 leading-tight truncate">
+              {currentChurch.name}
+            </h1>
+            <p className="text-xs text-stone-500 truncate hidden sm:block">
+              {[currentChurch.city && `${currentChurch.city}, ${currentChurch.state}`, currentChurch.pastorName]
+                .filter(Boolean)
+                .join(' • ')}
+            </p>
           </div>
 
-          {/* Action CTAs & Auth Profile Menu */}
-          <div className="flex items-center gap-3">
-            {/* Submit Prayer CTA with church primary color */}
-            <button
-              onClick={() => setSubmitModalOpen(true)}
-              style={currentTheme.btnPrimaryStyle}
-              className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg font-medium text-xs sm:text-sm shadow-xs transition-all cursor-pointer hover:opacity-95 shrink-0"
-            >
-              <PlusCircle className="w-4 h-4 shrink-0" />
-              <span>Submit Prayer<span className="hidden sm:inline"> Request</span></span>
-            </button>
+          {/* Share a prayer (on phones this is the floating button at the bottom) */}
+          <button
+            onClick={() => setSubmitModalOpen(true)}
+            style={currentTheme.btnPrimaryStyle}
+            className="hidden md:flex items-center gap-1.5 px-4 py-2 rounded-xl font-semibold text-sm shadow-xs cursor-pointer hover:opacity-95 shrink-0"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Share a Prayer Request</span>
+          </button>
 
-            {/* User Account / Login Button */}
-            {currentUser ? (
-              <div className="flex items-center gap-2">
-              <div className="relative">
+          {currentUser ? (
+            <div className="flex items-center gap-1.5 shrink-0">
+              <div className="relative" ref={menuRef}>
                 <button
-                  onClick={() => setUserDropdownOpen(!userDropdownOpen)}
-                  className="flex items-center gap-2.5 p-1.5 pr-3 bg-stone-100 hover:bg-stone-200 rounded-xl border border-stone-200 text-xs transition-all cursor-pointer"
+                  onClick={() => setMenuOpen((o) => !o)}
+                  className="flex items-center gap-1.5 p-1 sm:pr-2.5 rounded-full hover:bg-stone-100 border border-stone-200 cursor-pointer"
+                  aria-label="Account menu"
+                  aria-expanded={menuOpen}
                 >
-                  <img
-                    src={
-                      currentUser.avatarUrl ||
-                      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=80&h=80&q=80'
-                    }
-                    alt={currentUser.name}
-                    className="w-7 h-7 rounded-full object-cover border border-amber-400"
-                  />
-                  <div className="text-left hidden sm:block">
-                    <div className="font-bold text-stone-800 leading-tight flex items-center gap-1">
-                      <span>{currentUser.name.split(' ')[0]}</span>
-                      {currentUser.role === 'church_staff' ? (
-                        <ShieldCheck className="w-3 h-3 text-blue-600" />
-                      ) : currentUser.role === 'super_admin' ? (
-                        <Crown className="w-3 h-3 text-amber-500" />
-                      ) : (
-                        <UserCheck className="w-3 h-3 text-emerald-600" />
-                      )}
-                    </div>
-                    <span className="text-[10px] text-stone-500 font-medium">
-                      {currentUser.role === 'church_staff'
-                        ? 'Pastor/Staff'
-                        : currentUser.role === 'super_admin'
-                        ? 'Super Admin'
-                        : 'Member'}
+                  {currentUser.avatarUrl ? (
+                    <img src={currentUser.avatarUrl} alt="" className="w-8 h-8 rounded-full object-cover" />
+                  ) : (
+                    <span
+                      className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold"
+                      style={{ backgroundColor: currentTheme.primary }}
+                    >
+                      {currentUser.name.charAt(0).toUpperCase()}
                     </span>
-                  </div>
-                  <ChevronDown className="w-3.5 h-3.5 text-stone-500" />
+                  )}
+                  <span className="hidden sm:inline text-sm font-semibold text-stone-800 max-w-[110px] truncate">
+                    {currentUser.name.split(' ')[0]}
+                  </span>
+                  <ChevronDown className="w-3.5 h-3.5 text-stone-500 hidden sm:block" />
                 </button>
 
-                {/* Dropdown Menu */}
-                {userDropdownOpen && (
-                  <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-stone-200 p-2 z-50 animate-in fade-in duration-100">
-                    <div className="p-3 border-b border-stone-100 bg-stone-50/50 rounded-xl mb-1">
-                      <div className="font-bold text-stone-900 text-xs">{currentUser.name}</div>
-                      <div className="text-[11px] text-stone-500 truncate">{currentUser.email}</div>
-                      <div className="mt-1 flex items-center gap-1.5">
-                        <span
-                          className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
-                            currentUser.role === 'church_staff'
-                              ? 'bg-blue-100 text-blue-800'
-                              : currentUser.role === 'super_admin'
-                              ? 'bg-purple-100 text-purple-800'
-                              : 'bg-emerald-100 text-emerald-800'
-                          }`}
-                        >
-                          {currentUser.title || currentUser.role}{currentUser.role === 'congregation_member' && !currentUser.approved ? ' • awaiting approval' : ''}
-                        </span>
-                        <span className="text-[10px] text-stone-400">
-                          {userSubmissionsCount} submitted prayers
-                        </span>
+                {menuOpen && (
+                  <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-stone-200 p-2 z-50">
+                    <div className="px-3 py-2 border-b border-stone-100 mb-1">
+                      <div className="font-bold text-stone-900 text-sm truncate">{currentUser.name}</div>
+                      <div className="text-xs text-stone-500 truncate">{currentUser.email}</div>
+                      <div className="text-[11px] text-stone-500 mt-0.5">
+                        {currentUser.role === 'super_admin'
+                          ? 'Super Admin'
+                          : currentUser.role === 'church_staff'
+                          ? 'Pastor / Staff'
+                          : currentUser.approved
+                          ? 'Member'
+                          : 'Member • awaiting approval'}
                       </div>
                     </div>
-
-                    <button
-                      onClick={() => {
-                        setActiveTab('my-prayers');
-                        setUserDropdownOpen(false);
-                      }}
-                      className="w-full text-left px-3 py-2 text-xs font-semibold text-stone-700 hover:bg-amber-50 hover:text-amber-900 rounded-lg flex items-center justify-between transition-colors cursor-pointer"
-                    >
-                      <span className="flex items-center gap-2">
-                        <PrayingHands className="w-3.5 h-3.5 text-amber-600" />
-                        <span>My Prayers & Praises</span>
-                      </span>
-                      {userSubmissionsCount > 0 && (
-                        <span className="bg-amber-100 text-amber-800 text-[10px] font-bold px-1.5 py-0.2 rounded-full">
-                          {userSubmissionsCount}
-                        </span>
-                      )}
+                    <button className={menuItem} onClick={() => { setActiveTab('my-prayers'); setMenuOpen(false); }}>
+                      <PrayingHands className="w-4 h-4 text-stone-500" />
+                      My Prayers
                     </button>
-
-                    <button
-                      onClick={() => {
-                        setActiveTab('directory');
-                        setUserDropdownOpen(false);
-                      }}
-                      className="w-full text-left px-3 py-2 text-xs font-semibold text-stone-700 hover:bg-stone-50 hover:text-stone-900 rounded-lg flex items-center gap-2 transition-colors cursor-pointer"
-                    >
-                      <Users className="w-3.5 h-3.5 text-stone-500" />
-                      <span>Church Directory</span>
+                    <button className={menuItem} onClick={() => { setActiveTab('directory'); setMenuOpen(false); }}>
+                      <Users className="w-4 h-4 text-stone-500" />
+                      Church Directory
                     </button>
-
-                    {(activeRole === 'church_staff' || activeRole === 'super_admin') && (
-                      <button
-                        onClick={() => {
-                          setBrandingModalOpen(true);
-                          setUserDropdownOpen(false);
-                        }}
-                        className="w-full text-left px-3 py-2 text-xs font-semibold text-stone-700 hover:bg-stone-50 hover:text-stone-900 rounded-lg flex items-center gap-2 transition-colors cursor-pointer"
-                      >
-                        <Palette className="w-3.5 h-3.5 text-[#4eb8b9]" />
-                        <span>Church Logo & Color Theme</span>
+                    {isPastorOrStaff && (
+                      <button className={menuItem} onClick={() => { setBrandingModalOpen(true); setMenuOpen(false); }}>
+                        <Palette className="w-4 h-4 text-stone-500" />
+                        Church Logo & Colors
                       </button>
                     )}
-
-                    <button
-                      onClick={() => {
-                        openLoginModal(undefined, 'register_church');
-                        setUserDropdownOpen(false);
-                      }}
-                      className="w-full text-left px-3 py-2 text-xs font-semibold text-[#1e6a6b] hover:bg-[#4eb8b9]/10 rounded-lg flex items-center gap-2 transition-colors cursor-pointer"
-                    >
-                      <ChurchIcon className="w-3.5 h-3.5 text-[#4eb8b9]" />
-                      <span>+ Register a New Church</span>
+                    <button className={menuItem} onClick={() => { openLoginModal(undefined, 'register_church'); setMenuOpen(false); }}>
+                      <ChurchIcon className="w-4 h-4 text-stone-500" />
+                      Register a New Church
                     </button>
-
-                    <div className="border-t border-stone-100 my-1 pt-1">
+                    <div className="border-t border-stone-100 mt-1 pt-1">
                       <button
-                        onClick={() => {
-                          logout();
-                          setUserDropdownOpen(false);
-                        }}
-                        className="w-full text-left px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-lg flex items-center gap-2 transition-colors cursor-pointer"
+                        className={`${menuItem} text-rose-700 hover:bg-rose-50`}
+                        onClick={() => { setMenuOpen(false); logout(); }}
                       >
-                        <LogOut className="w-3.5 h-3.5 text-rose-500" />
-                        <span>Sign Out</span>
+                        <LogOut className="w-4 h-4" />
+                        Sign out
                       </button>
                     </div>
                   </div>
@@ -388,158 +261,54 @@ export const AppNavigation: React.FC = () => {
 
               {/* Always-visible sign out (also in the account menu) */}
               <button
-                onClick={() => {
-                  setUserDropdownOpen(false);
-                  logout();
-                }}
-                className="flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-rose-50 text-rose-700 rounded-lg text-xs font-semibold border border-stone-300 hover:border-rose-300 transition-all cursor-pointer"
+                onClick={() => { setMenuOpen(false); logout(); }}
+                className="flex items-center gap-1.5 p-2 sm:px-3 text-stone-600 hover:text-rose-700 hover:bg-rose-50 rounded-full text-sm font-semibold cursor-pointer"
                 title="Sign out"
+                aria-label="Sign out"
               >
-                <LogOut className="w-3.5 h-3.5" />
+                <LogOut className="w-4 h-4" />
                 <span className="hidden sm:inline">Sign out</span>
               </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => openLoginModal()}
-                className="flex items-center gap-1.5 px-3 py-2 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-lg text-xs font-semibold border border-stone-300 transition-all cursor-pointer"
-              >
-                <KeyRound className="w-3.5 h-3.5 text-stone-600" />
-                <span>Member / Staff Sign In</span>
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Navigation Tabs */}
-        <div className="flex items-center gap-1 mt-4 overflow-x-auto border-t border-stone-100 pt-2 text-sm font-medium">
-          {/* Prayer Wall - Visible to Church Members, Pastors & Staff */}
-          <button
-            onClick={() => setActiveTab('wall')}
-            className={`flex items-center gap-2 px-3 py-2 rounded-md transition-colors cursor-pointer shrink-0 ${
-              activeTab === 'wall'
-                ? 'bg-stone-100 text-stone-900 font-semibold'
-                : 'text-stone-600 hover:text-stone-900 hover:bg-stone-50'
-            }`}
-          >
-            <HeartHandshake className="w-4 h-4 text-amber-600" />
-            <span>Prayer Wall</span>
-          </button>
-
-          {/* Sunday Bulletin Builder - Pastor & Staff Accounts Only */}
-          {isPastorOrStaff && (
+            </div>
+          ) : (
             <button
-              onClick={() => setActiveTab('bulletin')}
-              className={`flex items-center gap-2 px-3 py-2 rounded-md transition-colors cursor-pointer shrink-0 ${
-                activeTab === 'bulletin'
-                  ? 'bg-stone-100 text-stone-900 font-semibold'
-                  : 'text-stone-600 hover:text-stone-900 hover:bg-stone-50'
-              }`}
+              onClick={() => openLoginModal()}
+              className="flex items-center gap-1.5 px-3 py-2 text-stone-700 hover:bg-stone-100 rounded-xl text-sm font-semibold border border-stone-200 cursor-pointer shrink-0"
             >
-              <Printer className="w-4 h-4 text-emerald-600" />
-              <span>Sunday Bulletin Builder</span>
-              <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-                Print
-              </span>
-            </button>
-          )}
-
-          {/* Church Directory Tab - Visible to Church Members, Pastors & Staff */}
-          <button
-            onClick={() => setActiveTab('directory')}
-            className={`flex items-center gap-2 px-3 py-2 rounded-md transition-colors cursor-pointer shrink-0 ${
-              activeTab === 'directory'
-                ? 'bg-stone-100 text-stone-900 font-semibold'
-                : 'text-stone-600 hover:text-stone-900 hover:bg-stone-50'
-            }`}
-          >
-            <Users className="w-4 h-4 text-blue-600" />
-            <span>Church Directory</span>
-            <span className="bg-blue-100 text-blue-800 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-              Photos & Roster
-            </span>
-          </button>
-
-          {/* My Prayers & Praises - Visible to Church Members, Pastors & Staff */}
-          <button
-            onClick={() => setActiveTab('my-prayers')}
-            className={`flex items-center gap-2 px-3 py-2 rounded-md transition-colors cursor-pointer shrink-0 relative ${
-              activeTab === 'my-prayers'
-                ? 'bg-stone-100 text-stone-900 font-semibold'
-                : 'text-stone-600 hover:text-stone-900 hover:bg-stone-50'
-            }`}
-          >
-            <PrayingHands className="w-4 h-4 text-amber-600" />
-            <span>My Prayers & Praises</span>
-            {userSubmissionsCount > 0 && (
-              <span className="bg-amber-100 text-amber-900 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-                {userSubmissionsCount}
-              </span>
-            )}
-          </button>
-
-          {/* Pastoral & Staff Special Access Portal - Pastor & Staff Accounts Only */}
-          {isPastorOrStaff && (
-            <button
-              onClick={() => setActiveTab('staff')}
-              className={`flex items-center gap-2 px-3 py-2 rounded-md transition-colors cursor-pointer relative shrink-0 ${
-                activeTab === 'staff'
-                  ? 'bg-stone-100 text-stone-900 font-semibold'
-                  : 'text-stone-600 hover:text-stone-900 hover:bg-stone-50'
-              }`}
-            >
-              <ShieldCheck className="w-4 h-4 text-indigo-600" />
-              <span>
-                {activeRole === 'super_admin' && !isImpersonating
-                  ? 'Super Admin Portal'
-                  : 'Pastoral / Staff Care'}
-              </span>
-              {flaggedRequests.length > 0 && (
-                <span className="bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full animate-pulse">
-                  {flaggedRequests.length} to review
-                </span>
-              )}
-            </button>
-          )}
-
-          {/* Global Network Wall - Pastor & Staff Accounts Only */}
-          {isPastorOrStaff && (
-            <button
-              onClick={() => setActiveTab('global')}
-              className={`flex items-center gap-2 px-3 py-2 rounded-md transition-colors cursor-pointer shrink-0 ${
-                activeTab === 'global'
-                  ? 'bg-stone-100 text-stone-900 font-semibold'
-                  : 'text-stone-600 hover:text-stone-900 hover:bg-stone-50'
-              }`}
-            >
-              <Globe className="w-4 h-4 text-indigo-600" />
-              <span>Global Network Wall</span>
-            </button>
-          )}
-
-          {/* Website Embed Code - Pastor & Staff Accounts Only (or simulator) */}
-          {(isPastorOrStaff || isEmbedSimulator) && (
-            <button
-              onClick={() => setActiveTab('embed')}
-              className={`flex items-center gap-2 px-3 py-2 rounded-md transition-colors cursor-pointer shrink-0 ${
-                activeTab === 'embed'
-                  ? 'bg-stone-100 text-stone-900 font-semibold'
-                  : 'text-stone-600 hover:text-stone-900 hover:bg-stone-50'
-              }`}
-            >
-              <Code className="w-4 h-4 text-purple-600" />
-              <span>Website Embed Code</span>
+              <LogIn className="w-4 h-4" />
+              <span>Sign in</span>
             </button>
           )}
         </div>
+
+        {/* Tabs */}
+        <nav className="flex items-center gap-1 -mb-px overflow-x-auto text-sm" aria-label="Sections">
+          {tabs
+            .filter((t) => t.show)
+            .map((t) => {
+              const active = activeTab === t.id;
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => setActiveTab(t.id)}
+                  className={`flex items-center gap-1.5 px-3 py-2.5 border-b-2 whitespace-nowrap shrink-0 cursor-pointer transition-colors ${
+                    active ? 'font-semibold text-stone-900' : 'border-transparent text-stone-500 hover:text-stone-800'
+                  }`}
+                  style={active ? { borderColor: currentTheme.primary } : undefined}
+                  aria-current={active ? 'page' : undefined}
+                >
+                  <span style={active ? { color: currentTheme.primary } : undefined}>{t.icon}</span>
+                  {t.label}
+                  {!!t.badge && (
+                    <span className="bg-amber-100 text-amber-900 text-[10px] font-bold px-1.5 rounded-full">{t.badge}</span>
+                  )}
+                </button>
+              );
+            })}
+        </nav>
       </div>
 
-      {/* Church Branding & Theme Customizer Modal */}
-      <ChurchBrandingModal
-        isOpen={brandingModalOpen}
-        onClose={() => setBrandingModalOpen(false)}
-      />
+      <ChurchBrandingModal isOpen={brandingModalOpen} onClose={() => setBrandingModalOpen(false)} />
     </header>
   );
 };
-

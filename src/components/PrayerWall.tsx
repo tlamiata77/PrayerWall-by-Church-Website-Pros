@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { PrayerRequest, RequestCategory, WallLayoutType } from '../types';
 import { getChurchTheme } from '../utils/theme';
@@ -7,32 +7,29 @@ import { EditPrayerModal } from './EditPrayerModal';
 import {
   Heart,
   Sparkles,
-  Flame,
-  CheckCircle2,
-  Lock,
-  Church as ChurchIcon,
   Search,
-  Share2,
-  Calendar,
-  Send,
-  MoreVertical,
   Check,
   Shield,
-  HelpCircle,
   Archive,
   RotateCcw,
   ChevronDown,
-  ChevronUp,
   Palette,
-  MapPin,
-  Phone,
-  Mail,
   Upload,
   Pencil,
   MessageCircle,
   X,
   CheckSquare,
   Trash2,
+  Plus,
+  Rows3,
+  LayoutGrid,
+  AlignLeft,
+  Settings2,
+  Flame,
+  CheckCircle2,
+  Lock,
+  Calendar,
+  Send,
 } from 'lucide-react';
 import { PrayingHands } from './icons/PrayingHands';
 
@@ -47,14 +44,32 @@ const CATEGORIES: RequestCategory[] = [
   'General',
 ];
 
+type CardLayout = 'list' | 'cards' | 'simple';
+const LAYOUT_KEY = 'prayerkeeper.cardLayout';
+
+// Each visitor's layout choice is remembered in their browser; until they choose, use the
+// church's default layout setting
+const readSavedLayout = (): CardLayout | null => {
+  try {
+    const v = localStorage.getItem(LAYOUT_KEY);
+    return v === 'list' || v === 'cards' || v === 'simple' ? v : null;
+  } catch {
+    return null;
+  }
+};
+const layoutFromChurchDefault = (d?: WallLayoutType): CardLayout =>
+  d === 'grid' || d === 'masonry' ? 'cards' : d === 'compact' ? 'simple' : 'list';
+
 interface PrayerWallProps {
   forceSingleColumn?: boolean;
+  /** Show the floating "Share a Prayer" button on phones (the app, not the embed) */
+  floatingShareButton?: boolean;
   overrideLayout?: WallLayoutType;
   /** Leave out the church name / scripture card (website embed "wall only") */
   hideChurchBanner?: boolean;
 }
 
-export const PrayerWall: React.FC<PrayerWallProps> = ({ forceSingleColumn = false, hideChurchBanner = false }) => {
+export const PrayerWall: React.FC<PrayerWallProps> = ({ forceSingleColumn = false, hideChurchBanner = false, floatingShareButton = false }) => {
   const {
     currentChurch,
     filteredChurchRequests,
@@ -88,6 +103,27 @@ export const PrayerWall: React.FC<PrayerWallProps> = ({ forceSingleColumn = fals
   const [openRequestId, setOpenRequestId] = useState<string | null>(null);
   const isStaff = activeRole === 'church_staff' || activeRole === 'super_admin';
   const [selectMode, setSelectMode] = useState(false);
+  const [layout, setLayout] = useState<CardLayout>(
+    () => readSavedLayout() || layoutFromChurchDefault(currentChurch.settings?.defaultWallLayout)
+  );
+  const changeLayout = (next: CardLayout) => {
+    setLayout(next);
+    try {
+      localStorage.setItem(LAYOUT_KEY, next);
+    } catch {
+      // private browsing: the choice just isn't remembered
+    }
+  };
+  const [staffToolsOpen, setStaffToolsOpen] = useState(false);
+  const staffToolsRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!staffToolsOpen) return;
+    const close = (e: MouseEvent) => {
+      if (staffToolsRef.current && !staffToolsRef.current.contains(e.target as Node)) setStaffToolsOpen(false);
+    };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [staffToolsOpen]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const exitSelectMode = () => {
@@ -168,6 +204,12 @@ export const PrayerWall: React.FC<PrayerWallProps> = ({ forceSingleColumn = fals
     return true;
   });
 
+  const visibleCountBase = filteredChurchRequests.filter((r) =>
+    activeRole === 'congregation_member' || activeRole === 'embed_view'
+      ? r.status === 'approved' && r.visibility !== 'private' && !r.isArchived
+      : r.status !== 'rejected' && (wallViewMode === 'archived' ? r.isArchived : !r.isArchived)
+  );
+
   const totalActiveWallCount = filteredChurchRequests.filter((r) => !r.isArchived && r.status === 'approved').length;
   const totalArchivedWallCount = filteredChurchRequests.filter((r) => r.isArchived).length;
   const totalPrayersCount = filteredChurchRequests.reduce((sum, r) => sum + r.prayerCount, 0);
@@ -180,7 +222,13 @@ export const PrayerWall: React.FC<PrayerWallProps> = ({ forceSingleColumn = fals
 
   const handlePray = (req: PrayerRequest) => {
     incrementPrayerCount(req.id);
-    showToast(`You joined with ${req.prayerCount} others in praying for "${req.title.slice(0, 30)}..."`);
+    const title = req.title.length > 40 ? `${req.title.slice(0, 40).trim()}...` : req.title;
+    const others = req.prayerCount;
+    showToast(
+      others === 0
+        ? `You're the first to pray for "${title}"`
+        : `You joined ${others} ${others === 1 ? 'other' : 'others'} in praying for "${title}"`
+    );
   };
 
   const handleAddEncouragement = (requestId: string) => {
@@ -199,502 +247,445 @@ export const PrayerWall: React.FC<PrayerWallProps> = ({ forceSingleColumn = fals
     'Lifting your family up before the Father today.',
   ];
 
+  const urgentCount = visibleCountBase.filter((r) => r.isUrgent).length;
+  const praiseCount = visibleCountBase.filter((r) => r.isAnswered).length;
+  const categoriesShown = CATEGORIES.filter((cat) => visibleCountBase.some((r) => r.category === cat));
+
+  // Shared pieces of every card layout
+  const dotColor = (req: PrayerRequest) =>
+    req.isArchived ? '#9b6fd0' : req.isUrgent ? '#e2566b' : req.isAnswered ? '#3aa676' : '#43b1a4';
+
+  const shortDate = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+
+  const statusTags = (req: PrayerRequest) => (
+    <>
+      {req.isUrgent && <span className="text-[#d33a4f] font-semibold whitespace-nowrap"> · Urgent</span>}
+      {req.isAnswered && <span className="text-[#1f8a5b] font-semibold whitespace-nowrap"> · Praise</span>}
+      {req.visibility === 'private' && <span className="text-purple-700 font-semibold whitespace-nowrap"> · Private</span>}
+      {req.isArchived && <span className="text-purple-700 font-semibold whitespace-nowrap"> · Archived</span>}
+    </>
+  );
+
+  const cardProps = (req: PrayerRequest) => ({
+    role: 'button' as const,
+    tabIndex: 0,
+    'aria-pressed': selectMode ? selectedIds.has(req.id) : undefined,
+    onClick: () => (selectMode ? toggleSelected(req.id) : openCard(req.id)),
+    onKeyDown: (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        if (selectMode) toggleSelected(req.id);
+        else openCard(req.id);
+      }
+    },
+  });
+
+  const selectBox = (req: PrayerRequest) =>
+    selectMode && (
+      <span
+        className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 ${
+          selectedIds.has(req.id) ? 'bg-stone-900 border-stone-900 text-white' : 'border-stone-300 bg-white'
+        }`}
+      >
+        {selectedIds.has(req.id) && <Check className="w-3.5 h-3.5" strokeWidth={3} />}
+      </span>
+    );
+
+  const selectedRing = (req: PrayerRequest) =>
+    selectMode && selectedIds.has(req.id) ? 'border-stone-900 ring-1 ring-stone-900' : 'border-stone-200 hover:border-stone-300';
+
+  const prayButton = (req: PrayerRequest, size: 'sm' | 'md' = 'md') => (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        handlePray(req);
+      }}
+      className={`flex items-center gap-1 rounded-full border bg-stone-50 border-stone-200 hover:bg-stone-100 font-bold transition-all active:scale-95 cursor-pointer ${
+        size === 'sm' ? 'px-2 py-1 text-xs' : 'px-2.5 py-1.5 text-[13px]'
+      }`}
+      style={{ color: currentTheme.primary, ...(req.prayedByMe ? { borderColor: `${currentTheme.primary}80` } : {}) }}
+      title="I prayed for this"
+      aria-label={`I prayed for this (${req.prayerCount} prayers)`}
+    >
+      <PrayingHands className={size === 'sm' ? 'w-3.5 h-3.5' : 'w-4 h-4'} />
+      <span>{req.prayerCount}</span>
+    </button>
+  );
+
+  const encourageButton = (req: PrayerRequest) => {
+    const count = req.recentEncouragements?.length || 0;
+    return (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          openCard(req.id, true);
+        }}
+        className="flex items-center gap-1 px-2.5 py-1.5 rounded-full border bg-stone-50 border-stone-200 hover:bg-stone-100 text-[13px] font-bold transition-all active:scale-95 cursor-pointer"
+        style={{ color: currentTheme.primary }}
+        title="Send encouragement"
+        aria-label="Send encouragement"
+      >
+        <MessageCircle className="w-4 h-4" />
+        {count > 0 && <span>{count}</span>}
+      </button>
+    );
+  };
+
+  const layoutOptions: Array<{ id: CardLayout; label: string; icon: React.ReactNode }> = [
+    { id: 'list', label: 'List', icon: <Rows3 className="w-4 h-4" /> },
+    { id: 'cards', label: 'Cards', icon: <LayoutGrid className="w-4 h-4" /> },
+    { id: 'simple', label: 'Simple', icon: <AlignLeft className="w-4 h-4" /> },
+  ];
+
+  const chip = (active: boolean) =>
+    `px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap shrink-0 cursor-pointer transition-colors border ${
+      active ? 'text-white border-transparent' : 'bg-white text-stone-600 border-stone-200 hover:bg-stone-50'
+    }`;
+  const chipStyle = (active: boolean) => (active ? { backgroundColor: currentTheme.primary } : undefined);
+
+  const staffToolButton =
+    'w-full text-left px-3 py-2.5 text-sm text-stone-700 hover:bg-stone-50 rounded-lg flex items-center gap-2.5 cursor-pointer';
+
   return (
-    <div className="prayer-wall-container max-w-7xl mx-auto px-2 sm:px-4 py-6 space-y-6">
+    <div className="prayer-wall-container max-w-6xl mx-auto px-3 sm:px-4 py-4 sm:py-6 space-y-4">
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed top-4 left-4 right-4 sm:top-auto sm:left-auto sm:bottom-24 sm:right-5 z-50 bg-stone-900 text-white px-4 py-3 rounded-xl shadow-xl flex items-center gap-3 border border-stone-700 animate-bounce">
-          <Heart className="w-5 h-5 text-amber-400 fill-amber-400" />
+        <div className="fixed top-4 left-4 right-4 sm:top-auto sm:left-auto sm:bottom-24 sm:right-5 z-50 bg-stone-900 text-white px-4 py-3 rounded-xl shadow-xl flex items-center gap-3 border border-stone-700">
+          <Heart className="w-5 h-5 text-amber-400 fill-amber-400 shrink-0" />
           <span className="text-sm font-medium">{toastMessage}</span>
         </div>
       )}
 
-      {/* Church Banner & Scripture Card */}
+      {/* Short welcome: verse and a count of prayers */}
       {!hideChurchBanner && (
-      <div
-        className="rounded-2xl p-6 sm:p-8 shadow-xs border relative overflow-hidden bg-white"
-        style={{
-          borderColor: `${currentTheme.primary}30`,
-        }}
-      >
-        <div
-          className="absolute top-0 right-0 w-96 h-96 rounded-full -mr-20 -mt-20 pointer-events-none opacity-40"
-          style={{
-            background: `radial-gradient(circle, ${currentTheme.primary}25 0%, transparent 70%)`,
-          }}
-        />
-        
-        <div className="relative z-10 space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-start gap-4">
-              {currentChurch.logoUrl ? (
-                <img
-                  src={currentChurch.logoUrl}
-                  alt={`${currentChurch.name} logo`}
-                  className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl object-cover border border-stone-200/90 shadow-xs shrink-0 bg-white"
-                />
-              ) : (
-                <div
-                  className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl text-white flex items-center justify-center shadow-xs shrink-0"
-                  style={{ backgroundColor: currentTheme.primary }}
-                >
-                  <ChurchIcon className="w-7 h-7 sm:w-8 sm:h-8" />
-                </div>
-              )}
-
-              <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span
-                    className="text-xs font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-md border"
-                    style={currentTheme.badgePrimaryStyle}
-                  >
-                    {currentChurch.denomination}
-                  </span>
-
-                  {(activeRole === 'church_staff' || activeRole === 'super_admin') && (
-                    <>
-                      <button
-                        onClick={() => setBrandingModalOpen(true)}
-                        className="flex items-center gap-1 text-[11px] font-semibold text-stone-600 hover:text-stone-900 bg-stone-100 hover:bg-stone-200 px-2 py-0.5 rounded border border-stone-200 cursor-pointer transition-colors"
-                        title="Set Church Logo, Address, Contact Info and Theme"
-                      >
-                        <Palette className="w-3 h-3 text-[#4eb8b9]" />
-                        <span>Edit Logo & Theme</span>
-                      </button>
-
-                      <button
-                        onClick={() => setImportModalOpen(true)}
-                        className="flex items-center gap-1 text-[11px] font-semibold text-amber-900 hover:text-amber-950 bg-amber-50 hover:bg-amber-100 px-2 py-0.5 rounded border border-amber-300 cursor-pointer transition-colors"
-                        title="Bulk import prayer requests from a CSV file with visual field matching"
-                      >
-                        <Upload className="w-3 h-3 text-amber-700" />
-                        <span>Import CSV (Field Matcher)</span>
-                      </button>
-
-                      <button
-                        onClick={() => repairDateTitles()}
-                        className="flex items-center gap-1 text-[11px] font-semibold text-emerald-900 hover:text-emerald-950 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded border border-emerald-300 cursor-pointer transition-colors"
-                        title="Re-align prayer titles and categories so the headline is the prayer petition (Grace Fellowship style)"
-                      >
-                        <Sparkles className="w-3 h-3 text-emerald-600" />
-                        <span>⚡ Re-align Card Titles & Categories</span>
-                      </button>
-                    </>
-                  )}
-                </div>
-
-                <h2 className="font-serif-church text-2xl sm:text-3xl font-bold text-stone-900 mt-1">
-                  {currentChurch.name} Prayer Wall
-                </h2>
-
-                {/* Address & Contact Details */}
-                <div className="flex items-center gap-3 text-xs text-stone-500 mt-0.5 flex-wrap">
-                  {currentChurch.address && (
-                    <span className="flex items-center gap-1">
-                      <MapPin className="w-3.5 h-3.5 text-[#4eb8b9]" />
-                      <span>
-                        {currentChurch.address}, {currentChurch.city}, {currentChurch.state} {currentChurch.zipCode || ''}
-                      </span>
-                    </span>
-                  )}
-                  {currentChurch.phone && (
-                    <span className="flex items-center gap-1">
-                      <Phone className="w-3.5 h-3.5 text-stone-400" />
-                      <span>{currentChurch.phone}</span>
-                    </span>
-                  )}
-                </div>
-
-                <p className="text-sm text-stone-600 max-w-2xl mt-1.5 leading-relaxed">
-                  {currentChurch.welcomeMessage}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <div
-                className="rounded-xl px-4 py-2.5 text-center border"
-                style={{
-                  backgroundColor: `${currentTheme.primary}10`,
-                  borderColor: `${currentTheme.primary}30`,
-                }}
-              >
-                <span className="block text-xl font-bold" style={{ color: currentTheme.primary }}>
-                  {visibleRequests.length}
-                </span>
-                <span className="text-[11px] uppercase tracking-wider font-semibold" style={{ color: currentTheme.primary }}>
-                  Active Needs
-                </span>
-              </div>
-
-              <div
-                className="rounded-xl px-4 py-2.5 text-center border"
-                style={{
-                  backgroundColor: `${currentTheme.accent}12`,
-                  borderColor: `${currentTheme.accent}30`,
-                }}
-              >
-                <span className="block text-xl font-bold" style={{ color: currentTheme.accent }}>
-                  {totalPrayersCount}
-                </span>
-                <span className="text-[11px] uppercase tracking-wider font-semibold" style={{ color: currentTheme.accent }}>
-                  Prayers Logged
-                </span>
-              </div>
-
-              <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2.5 text-center hidden sm:block">
-                <span className="block text-xl font-bold text-emerald-800">{answeredCount}</span>
-                <span className="text-[11px] text-emerald-700 uppercase tracking-wider font-medium">Praises Answered</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Scripture of the week */}
-          <div
-            className="p-3.5 rounded-r-xl border-l-4 text-stone-700 italic text-sm flex items-start gap-2.5"
-            style={{
-              backgroundColor: `${currentTheme.primary}08`,
-              borderLeftColor: currentTheme.accent,
-            }}
-          >
-            <Sparkles className="w-4 h-4 shrink-0 mt-0.5" style={{ color: currentTheme.accent }} />
-            <p className="font-serif-church">"{currentChurch.scriptureVerse}"</p>
-          </div>
+        <div className="space-y-1">
+          {currentChurch.scriptureVerse && (
+            <p className="font-serif-church italic text-stone-700 text-sm sm:text-base leading-snug">
+              "{currentChurch.scriptureVerse}"
+            </p>
+          )}
+          <p className="text-xs sm:text-sm text-stone-500">
+            <strong className="text-stone-800">{totalActiveWallCount}</strong> prayer requests ·{' '}
+            <strong className="text-stone-800">{totalPrayersCount}</strong> prayers offered ·{' '}
+            <strong className="text-stone-800">{answeredCount}</strong> praises
+          </p>
         </div>
-      </div>
       )}
 
-      {/* Filter and Search Bar */}
-      <div className="bg-white rounded-xl p-4 shadow-xs border border-stone-200/80 space-y-3">
-        {/* Staff Wall Active vs Archived Toggle */}
-        {(activeRole === 'church_staff' || activeRole === 'super_admin') && (
-          <div className="space-y-2 border-b border-stone-100 pb-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setWallViewMode('active')}
-                  className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                    wallViewMode === 'active'
-                      ? 'bg-amber-600 text-white shadow-xs'
-                      : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
-                  }`}
-                >
-                  <Heart className="w-3.5 h-3.5" />
-                  <span>Active Congregation Wall ({totalActiveWallCount})</span>
-                </button>
+      {/* Staff tools: which prayers to show, selecting, and the rest in one menu */}
+      {isStaff && (
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex bg-stone-100 p-0.5 rounded-xl text-sm">
+            <button
+              onClick={() => setWallViewMode('active')}
+              className={`px-3 py-1.5 rounded-lg font-semibold cursor-pointer ${
+                wallViewMode === 'active' ? 'bg-white text-stone-900 shadow-xs' : 'text-stone-500'
+              }`}
+            >
+              Active ({totalActiveWallCount})
+            </button>
+            <button
+              onClick={() => setWallViewMode('archived')}
+              className={`px-3 py-1.5 rounded-lg font-semibold cursor-pointer ${
+                wallViewMode === 'archived' ? 'bg-white text-stone-900 shadow-xs' : 'text-stone-500'
+              }`}
+            >
+              Archived ({totalArchivedWallCount})
+            </button>
+          </div>
 
-                <button
-                  onClick={() => setWallViewMode('archived')}
-                  className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                    wallViewMode === 'archived'
-                      ? 'bg-purple-800 text-white shadow-xs'
-                      : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
-                  }`}
-                >
-                  <Archive className="w-3.5 h-3.5 text-purple-400" />
-                  <span>Archived Prayers Vault ({totalArchivedWallCount})</span>
-                </button>
-              </div>
+          <button
+            onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}
+            className={`text-sm px-3 py-1.5 rounded-xl border flex items-center gap-1.5 font-semibold cursor-pointer ${
+              selectMode ? 'bg-stone-900 text-white border-stone-900' : 'text-stone-700 border-stone-200 bg-white hover:bg-stone-50'
+            }`}
+            title="Pick prayers to archive, restore or delete together"
+          >
+            <CheckSquare className="w-4 h-4" />
+            {selectMode ? 'Done' : 'Select'}
+          </button>
 
-              {/* Bulk Archiving & Restoring Tools */}
-              <div className="flex items-center gap-2 flex-wrap">
+          <div className="relative" ref={staffToolsRef}>
+            <button
+              onClick={() => setStaffToolsOpen((o) => !o)}
+              className="text-sm px-3 py-1.5 rounded-xl border border-stone-200 bg-white hover:bg-stone-50 text-stone-700 flex items-center gap-1.5 font-semibold cursor-pointer"
+              aria-expanded={staffToolsOpen}
+            >
+              <Settings2 className="w-4 h-4" />
+              Tools
+              <ChevronDown className="w-3.5 h-3.5" />
+            </button>
+            {staffToolsOpen && (
+              <div className="absolute left-0 mt-2 w-72 bg-white rounded-2xl shadow-xl border border-stone-200 p-2 z-30">
                 {wallViewMode === 'active' ? (
                   <>
                     <button
+                      className={staffToolButton}
                       onClick={() => {
+                        setStaffToolsOpen(false);
                         const count = bulkArchiveAnsweredPrayers();
-                        showToast(count > 0 ? `Archived ${count} answered praise reports to vault!` : 'No unarchived praises to move.');
+                        showToast(count > 0 ? `Archived ${count} praise reports.` : 'No praises to archive.');
                       }}
-                      className="text-xs text-emerald-800 hover:bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200 transition-colors cursor-pointer flex items-center gap-1 font-medium"
-                      title="Move answered prayers off the active wall into the testimony archive"
                     >
-                      <Sparkles className="w-3 h-3 text-emerald-600" />
-                      <span>Archive Answered ({answeredCount})</span>
+                      <Sparkles className="w-4 h-4 text-stone-500" />
+                      Archive praises ({answeredCount})
                     </button>
-
                     <button
+                      className={staffToolButton}
                       onClick={() => {
+                        setStaffToolsOpen(false);
                         const count = bulkArchiveOlderWallPrayers(30);
-                        showToast(count > 0 ? `Archived ${count} prayers older than 30 days to vault!` : 'No prayers older than 30 days.');
+                        showToast(count > 0 ? `Archived ${count} prayers older than 30 days.` : 'No prayers older than 30 days.');
                       }}
-                      className="text-xs text-stone-600 hover:bg-stone-100 px-2.5 py-1 rounded-md border border-stone-200 transition-colors cursor-pointer flex items-center gap-1 font-medium"
-                      title="Archive older inactive prayers to keep wall relevant"
                     >
-                      <Archive className="w-3 h-3 text-stone-500" />
-                      <span>Archive Inactive (&gt;30d)</span>
+                      <Archive className="w-4 h-4 text-stone-500" />
+                      Archive prayers older than 30 days
                     </button>
-
                     <button
+                      className={staffToolButton}
                       onClick={() => {
+                        setStaffToolsOpen(false);
                         const ids = filteredChurchRequests.filter((r) => !r.isArchived && r.status === 'approved').map((r) => r.id);
                         if (ids.length === 0) {
                           showToast('There are no active prayers to archive.');
                           return;
                         }
-                        if (!window.confirm(`Archive all ${ids.length} active prayers? They'll move to the Archived Prayers Vault, and you can restore them any time.`)) return;
+                        if (!window.confirm(`Archive all ${ids.length} active prayers? They'll move to Archived, and you can restore them any time.`)) return;
                         const count = setPrayersArchived(ids, true, 'Archived with all active prayers');
                         exitSelectMode();
-                        showToast(`Archived ${count} prayers to the vault.`);
+                        showToast(`Archived ${count} prayers.`);
                       }}
-                      className="text-xs text-purple-800 hover:bg-purple-50 px-2.5 py-1 rounded-md border border-purple-200 transition-colors cursor-pointer flex items-center gap-1 font-medium"
-                      title="Move every active prayer off the wall into the archive (you can restore them later)"
                     >
-                      <Archive className="w-3 h-3 text-purple-600" />
-                      <span>Archive All Active ({totalActiveWallCount})</span>
+                      <Archive className="w-4 h-4 text-stone-500" />
+                      Archive all active ({totalActiveWallCount})
                     </button>
                   </>
                 ) : (
-                  totalArchivedWallCount > 0 && (
-                    <button
-                      onClick={() => {
-                        restoreAllWallArchives();
-                        setWallViewMode('active');
-                        showToast(`Restored all ${totalArchivedWallCount} archived prayers back to the active wall!`);
-                      }}
-                      className="text-xs text-purple-800 bg-purple-50 hover:bg-purple-100 px-3 py-1 rounded-md border border-purple-200 transition-colors cursor-pointer flex items-center gap-1.5 font-bold"
-                    >
-                      <RotateCcw className="w-3.5 h-3.5 text-purple-600" />
-                      <span>Restore All to Active Wall</span>
-                    </button>
-                  )
+                  <button
+                    className={staffToolButton}
+                    disabled={totalArchivedWallCount === 0}
+                    onClick={() => {
+                      setStaffToolsOpen(false);
+                      restoreAllWallArchives();
+                      setWallViewMode('active');
+                      showToast(`Restored all ${totalArchivedWallCount} archived prayers.`);
+                    }}
+                  >
+                    <RotateCcw className="w-4 h-4 text-stone-500" />
+                    Restore all to the wall
+                  </button>
                 )}
-
-                <button
-                  onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}
-                  className={`text-xs px-2.5 py-1 rounded-md border transition-colors cursor-pointer flex items-center gap-1 font-bold ${
-                    selectMode
-                      ? 'bg-stone-900 text-white border-stone-900'
-                      : 'text-stone-700 border-stone-300 hover:bg-stone-100'
-                  }`}
-                  title="Pick individual prayers to archive or restore together"
-                >
-                  <CheckSquare className="w-3.5 h-3.5" />
-                  <span>{selectMode ? 'Done Selecting' : 'Select'}</span>
+                <div className="border-t border-stone-100 my-1" />
+                <button className={staffToolButton} onClick={() => { setStaffToolsOpen(false); setImportModalOpen(true); }}>
+                  <Upload className="w-4 h-4 text-stone-500" />
+                  Import from a spreadsheet (CSV)
+                </button>
+                <button className={staffToolButton} onClick={() => { setStaffToolsOpen(false); repairDateTitles(); }}>
+                  <Sparkles className="w-4 h-4 text-stone-500" />
+                  Tidy up titles & categories
+                </button>
+                <button className={staffToolButton} onClick={() => { setStaffToolsOpen(false); setBrandingModalOpen(true); }}>
+                  <Palette className="w-4 h-4 text-stone-500" />
+                  Church logo & colors
                 </button>
               </div>
-            </div>
-
-            <div className="text-[11px] text-stone-500 bg-stone-50 rounded-lg p-2 flex items-center justify-between">
-              <span>
-                {wallViewMode === 'active'
-                  ? 'Showing prayers currently visible to congregation members. Pastors can archive resolved requests to maintain a fresh wall.'
-                  : 'Pastoral Vault: Historical record of answered prayers and past requests. Archived requests are hidden from congregation view but preserved forever.'}
-              </span>
-            </div>
-          </div>
-        )}
-
-        <div className="space-y-3">
-          {/* Full-width Search Input: never squishes or disappears on mobile */}
-          <div className="relative w-full">
-            <Search className="w-4 h-4 text-stone-400 absolute left-3.5 top-3.5 pointer-events-none" />
-            <input
-              type="text"
-              placeholder="Search prayers by name, need, or keywords..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-9 py-2.5 bg-stone-50 hover:bg-stone-100/60 focus:bg-white rounded-xl text-sm border border-stone-200 focus:outline-none focus:ring-2 focus:ring-amber-500 transition-colors placeholder:text-stone-400"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-2.5 text-stone-400 hover:text-stone-700 p-1 text-xs cursor-pointer font-bold"
-                title="Clear search"
-              >
-                ✕
-              </button>
             )}
           </div>
+        </div>
+      )}
 
-          {/* Quick Toggles & Active Count */}
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex flex-wrap items-center gap-2">
+      {/* Search, layout choice and filters */}
+      <div className="space-y-2.5">
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1 min-w-0">
+            <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="search"
+              placeholder="Search prayers"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-3 py-2.5 bg-white rounded-xl text-base sm:text-sm border border-stone-200 focus:outline-none focus:ring-2 focus:ring-stone-300 placeholder:text-stone-400"
+              aria-label="Search prayers"
+            />
+          </div>
+          <div className="inline-flex bg-stone-100 p-0.5 rounded-xl shrink-0" role="radiogroup" aria-label="Card layout">
+            {layoutOptions.map((o) => (
               <button
-                onClick={() => setFilterUrgentOnly(!filterUrgentOnly)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors cursor-pointer ${
-                  filterUrgentOnly
-                    ? 'bg-rose-50 text-rose-700 border-rose-300'
-                    : 'bg-stone-50 text-stone-600 border-stone-200 hover:bg-stone-100'
+                key={o.id}
+                role="radio"
+                aria-checked={layout === o.id}
+                onClick={() => changeLayout(o.id)}
+                className={`flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs font-semibold cursor-pointer ${
+                  layout === o.id ? 'bg-white text-stone-900 shadow-xs' : 'text-stone-500 hover:text-stone-800'
                 }`}
+                title={`${o.label} layout`}
               >
-                <Flame className="w-3.5 h-3.5 text-rose-500" />
-                <span>Urgent Only</span>
+                {o.icon}
+                <span className="hidden sm:inline">{o.label}</span>
               </button>
-
-              <button
-                onClick={() => setFilterAnsweredOnly(!filterAnsweredOnly)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors cursor-pointer ${
-                  filterAnsweredOnly
-                    ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                    : 'bg-stone-50 text-stone-600 border-stone-200 hover:bg-stone-100'
-                }`}
-              >
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Praises / Answered</span>
-              </button>
-            </div>
-
-            <div className="flex items-center gap-2 flex-wrap">
-              <div className="text-xs text-stone-500 font-medium hidden md:inline">
-                Showing <strong>{visibleRequests.length}</strong> prayers
-              </div>
-
-            </div>
+            ))}
           </div>
         </div>
 
-        {/* Category Pills */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 -mx-3 px-3 sm:mx-0 sm:px-0">
           <button
-            onClick={() => setSelectedCategory('All')}
-            className={`px-3 py-1.5 rounded-full font-medium transition-all shrink-0 cursor-pointer ${
-              selectedCategory === 'All'
-                ? 'bg-stone-900 text-white shadow-xs'
-                : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
-            }`}
+            className={chip(selectedCategory === 'All' && !filterUrgentOnly && !filterAnsweredOnly)}
+            style={chipStyle(selectedCategory === 'All' && !filterUrgentOnly && !filterAnsweredOnly)}
+            onClick={() => {
+              setSelectedCategory('All');
+              setFilterUrgentOnly(false);
+              setFilterAnsweredOnly(false);
+            }}
           >
-            All Categories ({filteredChurchRequests.length})
+            All
           </button>
-          {CATEGORIES.map((cat) => {
-            const count = filteredChurchRequests.filter((r) => r.category === cat).length;
-            return (
-              <button
-                key={cat}
-                onClick={() => setSelectedCategory(cat)}
-                className={`px-3 py-1.5 rounded-full font-medium transition-all shrink-0 cursor-pointer ${
-                  selectedCategory === cat
-                    ? 'bg-amber-600 text-white shadow-xs'
-                    : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
-                }`}
-              >
-                {cat} {count > 0 && `(${count})`}
-              </button>
-            );
-          })}
+          {urgentCount > 0 && (
+            <button className={chip(filterUrgentOnly)} style={chipStyle(filterUrgentOnly)} onClick={() => setFilterUrgentOnly((v) => !v)}>
+              Urgent ({urgentCount})
+            </button>
+          )}
+          {praiseCount > 0 && (
+            <button className={chip(filterAnsweredOnly)} style={chipStyle(filterAnsweredOnly)} onClick={() => setFilterAnsweredOnly((v) => !v)}>
+              Praises ({praiseCount})
+            </button>
+          )}
+          {categoriesShown.map((cat) => (
+            <button
+              key={cat}
+              className={chip(selectedCategory === cat)}
+              style={chipStyle(selectedCategory === cat)}
+              onClick={() => setSelectedCategory(selectedCategory === cat ? 'All' : cat)}
+            >
+              {cat}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Prayer Request Cards Grid */}
+      {/* Prayer requests */}
       {visibleRequests.length === 0 ? (
-        <div className="bg-white rounded-2xl p-12 text-center border border-stone-200 max-w-lg mx-auto space-y-4">
-          <div className="w-16 h-16 rounded-full bg-amber-50 text-amber-700 flex items-center justify-center mx-auto">
-            <Heart className="w-8 h-8 text-amber-600" />
-          </div>
+        <div className="bg-white rounded-2xl p-8 sm:p-12 text-center border border-stone-200 max-w-lg mx-auto space-y-3">
           <h3 className="font-serif-church text-xl font-bold text-stone-900">
-            {filteredChurchRequests.length === 0 ? `Welcome to ${currentChurch.name}!` : 'No prayer requests match your filter'}
+            {filteredChurchRequests.length === 0 ? 'No prayer requests yet' : 'No prayer requests match'}
           </h3>
           <p className="text-sm text-stone-500">
             {filteredChurchRequests.length === 0
-              ? `There are no prayer requests yet for ${currentChurch.name}. You can submit a new prayer request or bulk import existing requests from a CSV file.`
-              : searchQuery
-              ? 'Try changing your search keywords or resetting filters.'
-              : 'Be the first to share a prayer request or praise report with our church family.'}
+              ? 'Be the first to share a prayer request with our church family.'
+              : 'Try a different search or filter.'}
           </p>
           <div className="flex items-center justify-center gap-3 flex-wrap">
             <button
               onClick={() => setSubmitModalOpen(true)}
-              className="px-4 py-2 bg-amber-600 text-white rounded-lg text-sm font-semibold hover:bg-amber-700 transition-colors cursor-pointer"
+              style={currentTheme.btnPrimaryStyle}
+              className="px-4 py-2 rounded-xl text-sm font-semibold cursor-pointer"
             >
-              Submit Prayer Request
+              Share a Prayer Request
             </button>
-            {(activeRole === 'church_staff' || activeRole === 'super_admin') && (
+            {isStaff && filteredChurchRequests.length === 0 && (
               <button
                 onClick={() => setImportModalOpen(true)}
-                className="px-4 py-2 bg-amber-50 text-amber-900 border border-amber-300 rounded-lg text-sm font-semibold hover:bg-amber-100 transition-colors cursor-pointer flex items-center gap-1.5"
-                title={`Import CSV prayer requests directly into ${currentChurch.name}`}
+                className="px-4 py-2 bg-white text-stone-700 border border-stone-200 rounded-xl text-sm font-semibold hover:bg-stone-50 cursor-pointer flex items-center gap-1.5"
               >
-                <Upload className="w-4 h-4 text-amber-700" />
-                <span>Import CSV into {currentChurch.name}</span>
+                <Upload className="w-4 h-4" />
+                Import from a spreadsheet
               </button>
             )}
           </div>
         </div>
+      ) : layout === 'cards' ? (
+        <div className={`grid gap-3 prayer-cards-grid ${forceSingleColumn ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'}`}>
+          {visibleRequests.map((req) => {
+            const body = (req.content || '').replace(/^\[[^\]]+\]\s*/, '').trim();
+            const details = body.toLowerCase() !== req.title.trim().toLowerCase() ? body : '';
+            return (
+              <div
+                key={req.id}
+                {...cardProps(req)}
+                className={`min-w-0 flex flex-col gap-2 p-4 bg-white rounded-2xl border shadow-xs hover:shadow-sm transition-all cursor-pointer ${selectedRing(req)}`}
+              >
+                <div className="flex items-center gap-2 text-[13px] text-stone-500 min-w-0">
+                  {selectBox(req)}
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: dotColor(req) }} />
+                  <span className="truncate">
+                    <span className="font-semibold text-stone-700">{req.requesterName}</span> · {shortDate(req.createdAt)}
+                    {statusTags(req)}
+                  </span>
+                </div>
+                <h3 className="text-base font-semibold text-stone-900 leading-snug">{req.title}</h3>
+                {details && <p className="text-sm text-stone-600 leading-relaxed line-clamp-3">{details}</p>}
+                {!selectMode && (
+                  <div className="flex items-center gap-1.5 mt-auto pt-1">
+                    {prayButton(req)}
+                    {encourageButton(req)}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ) : layout === 'simple' ? (
+        <div className={`bg-white rounded-2xl border border-stone-200 px-4 sm:px-6 py-1 prayer-cards-grid ${forceSingleColumn ? '' : 'md:columns-2 md:gap-10'}`}>
+          {visibleRequests.map((req) => (
+            <div
+              key={req.id}
+              {...cardProps(req)}
+              className={`break-inside-avoid flex items-start gap-2.5 py-2.5 border-b border-stone-100 cursor-pointer ${
+                selectMode && selectedIds.has(req.id) ? 'bg-stone-50' : ''
+              }`}
+            >
+              {selectBox(req)}
+              <p className="flex-1 min-w-0 text-[15px] leading-snug text-stone-700">
+                <strong className="text-stone-900">{req.requesterName}</strong>
+                <span className="text-stone-400"> — </span>
+                {req.title}
+                {(req.isUrgent || req.isAnswered || req.isArchived || req.visibility === 'private') && (
+                  <span className="text-xs">{statusTags(req)}</span>
+                )}
+              </p>
+              {!selectMode && prayButton(req, 'sm')}
+            </div>
+          ))}
+        </div>
       ) : (
         <div className={`grid gap-2.5 sm:gap-3 prayer-cards-grid ${forceSingleColumn ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2'}`}>
-            {visibleRequests.map((req) => {
-              const encouragementCount = req.recentEncouragements?.length || 0;
-              return (
-                <div
-                  key={req.id}
-                  role="button"
-                  tabIndex={0}
-                  aria-pressed={selectMode ? selectedIds.has(req.id) : undefined}
-                  onClick={() => (selectMode ? toggleSelected(req.id) : openCard(req.id))}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      if (selectMode) toggleSelected(req.id);
-                      else openCard(req.id);
-                    }
-                  }}
-                  className={`min-w-0 flex items-center gap-3 px-4 py-3.5 bg-white rounded-xl border shadow-xs hover:shadow-sm transition-all cursor-pointer ${
-                    selectMode && selectedIds.has(req.id)
-                      ? 'border-stone-900 ring-1 ring-stone-900'
-                      : 'border-stone-200 hover:border-stone-300'
-                  }`}
-                >
-                  {selectMode && (
-                    <span
-                      className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 ${
-                        selectedIds.has(req.id) ? 'bg-stone-900 border-stone-900 text-white' : 'border-stone-300 bg-white'
-                      }`}
-                    >
-                      {selectedIds.has(req.id) && <Check className="w-3.5 h-3.5" strokeWidth={3} />}
-                    </span>
-                  )}
-                  <span
-                    className="w-2.5 h-2.5 rounded-full shrink-0"
-                    style={{
-                      backgroundColor: req.isArchived ? '#9b6fd0' : req.isUrgent ? '#e2566b' : req.isAnswered ? '#3aa676' : '#43b1a4',
-                    }}
-                  />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[15px] font-semibold text-stone-900 leading-snug line-clamp-2">{req.title}</p>
-                    <p className="text-[13px] text-stone-500 mt-0.5 truncate">
-                      {req.requesterName} ·{' '}
-                      {new Date(req.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                      {req.isUrgent && <span className="text-[#d33a4f] font-semibold"> · Urgent</span>}
-                      {req.isAnswered && <span className="text-[#1f8a5b] font-semibold"> · Praise</span>}
-                      {req.visibility === 'private' && <span className="text-purple-700 font-semibold"> · Private</span>}
-                      {req.isArchived && <span className="text-purple-700 font-semibold"> · Archived</span>}
-                    </p>
-                  </div>
-                  {!selectMode && (
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handlePray(req);
-                      }}
-                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-full border bg-stone-50 border-stone-200 hover:bg-stone-100 text-[13px] font-bold transition-all active:scale-95 cursor-pointer"
-                      style={{ color: currentTheme.primary, ...(req.prayedByMe ? { borderColor: `${currentTheme.primary}80` } : {}) }}
-                      title="I prayed for this"
-                      aria-label={`I prayed for this (${req.prayerCount} prayers)`}
-                    >
-                      <PrayingHands className="w-4 h-4" />
-                      <span>{req.prayerCount}</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openCard(req.id, true);
-                      }}
-                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-full border bg-stone-50 border-stone-200 hover:bg-stone-100 text-[13px] font-bold transition-all active:scale-95 cursor-pointer"
-                      style={{ color: currentTheme.primary }}
-                      title="Send encouragement"
-                      aria-label="Send encouragement"
-                    >
-                      <MessageCircle className="w-4 h-4" />
-                      {encouragementCount > 0 && <span>{encouragementCount}</span>}
-                    </button>
-                  </div>
-                  )}
+          {visibleRequests.map((req) => (
+            <div
+              key={req.id}
+              {...cardProps(req)}
+              className={`min-w-0 flex items-center gap-3 px-4 py-3.5 bg-white rounded-xl border shadow-xs hover:shadow-sm transition-all cursor-pointer ${selectedRing(req)}`}
+            >
+              {selectBox(req)}
+              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: dotColor(req) }} />
+              <div className="flex-1 min-w-0">
+                <p className="text-[15px] font-semibold text-stone-900 leading-snug line-clamp-2">{req.title}</p>
+                <p className="text-[13px] text-stone-500 mt-0.5 truncate">
+                  {req.requesterName} · {shortDate(req.createdAt)}
+                  {statusTags(req)}
+                </p>
+              </div>
+              {!selectMode && (
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {prayButton(req)}
+                  {encourageButton(req)}
                 </div>
-              );
-            })}
+              )}
+            </div>
+          ))}
         </div>
+      )}
+
+      {/* Phones: a floating button to share a prayer, always within reach */}
+      {floatingShareButton && !selectMode && (
+        <button
+          onClick={() => setSubmitModalOpen(true)}
+          style={currentTheme.btnPrimaryStyle}
+          className="md:hidden fixed bottom-4 right-4 z-30 flex items-center gap-2 pl-4 pr-5 py-3.5 rounded-full shadow-lg font-semibold text-sm cursor-pointer active:scale-95 transition-transform"
+        >
+          <Plus className="w-5 h-5" />
+          Share a Prayer
+        </button>
       )}
 
       {/* Bulk selection bar (staff) */}
