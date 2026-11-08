@@ -19,7 +19,6 @@ import { AuthModal } from './components/AuthModal';
 import { ImportPrayersModal } from './components/ImportPrayersModal';
 import { SetNewPasswordModal } from './components/SetNewPasswordModal';
 import { EmbedView } from './components/EmbedView';
-import { Heart, Sparkles, Shield, Printer, Globe, Code } from 'lucide-react';
 
 const MainContent: React.FC = () => {
   const {
@@ -53,7 +52,7 @@ const MainContent: React.FC = () => {
   return (
     <main className="min-h-screen pb-16">
       {dataError && (
-        <div className="max-w-7xl mx-auto px-4 pt-4 no-print">
+        <div className="max-w-6xl mx-auto px-3 sm:px-4 pt-4 no-print">
           <div className="bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-xl px-4 py-2.5 flex items-center justify-between gap-3">
             <span>{dataError}</span>
             <button onClick={clearDataError} className="font-bold cursor-pointer" aria-label="Dismiss">
@@ -64,15 +63,15 @@ const MainContent: React.FC = () => {
       )}
 
       {!isLoading && !currentUser && currentChurch.slug === DEMO_CHURCH_SLUG && (
-        <div className="max-w-7xl mx-auto px-4 pt-4 no-print">
-          <div className="bg-[#43b1a4]/10 border border-[#43b1a4]/40 text-stone-800 text-sm rounded-xl px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="bg-[#43b1a4]/10 border-b border-[#43b1a4]/30 no-print">
+          <div className="max-w-6xl mx-auto px-3 sm:px-4 py-2 text-xs sm:text-sm text-stone-700 flex items-center justify-between gap-3">
             <span>
-              <strong>You're viewing a demo.</strong> Riverside Community Church is a sample prayer wall with
-              made-up names, so you can see how PrayerKeeper works.
+              <strong>Demo prayer wall</strong>
+              <span className="hidden sm:inline"> with made-up names, so you can see how PrayerKeeper works</span>
             </span>
             <button
               onClick={() => openLoginModal(undefined, 'register_church')}
-              className="shrink-0 bg-[#d312b4] hover:bg-[#b80f9c] text-white font-semibold px-4 py-2 rounded-full text-xs cursor-pointer"
+              className="shrink-0 text-[#b80f9c] hover:text-[#d312b4] font-semibold underline underline-offset-2 cursor-pointer"
             >
               Register your church free
             </button>
@@ -86,7 +85,7 @@ const MainContent: React.FC = () => {
         </div>
       )}
 
-      {!isLoading && activeTab === 'wall' && <PrayerWall />}
+      {!isLoading && activeTab === 'wall' && <PrayerWall floatingShareButton />}
       {!isLoading && activeTab === 'bulletin' && (isPastorOrStaff ? <PrintableBulletinBuilder /> : <PrayerWall />)}
       {!isLoading && activeTab === 'staff' && (isPastorOrStaff ? <StaffModerationPortal /> : <PrayerWall />)}
       {!isLoading && activeTab === 'directory' && <ChurchDirectory />}
@@ -124,7 +123,7 @@ export default function App({ embed = false }: { embed?: boolean }) {
 
   return (
     <AppProvider>
-      <div className="min-h-screen bg-stone-100/70 text-stone-900 flex flex-col justify-between selection:bg-amber-100 selection:text-amber-900">
+      <div className="min-h-screen bg-[#f8f9fb] text-stone-900 flex flex-col justify-between selection:bg-amber-100 selection:text-amber-900">
         <div>
           {/* Super Admin Impersonation Alert Banner */}
           <ImpersonationBanner />
@@ -137,31 +136,11 @@ export default function App({ embed = false }: { embed?: boolean }) {
         </div>
 
         {/* Clean Footer (Hidden in Print) */}
-        <footer className="bg-white border-t border-stone-200 py-8 px-4 text-xs text-stone-500 no-print">
-          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <span className="font-serif-church font-bold text-stone-800 text-sm">
-                PrayerKeeper
-              </span>
-              <span>by Church Website Pros</span>
-              <span className="text-stone-300">•</span>
-              <span>Multi-Tenant Church Prayer Management & Printable Prayer Lists</span>
-            </div>
-
-            <div className="flex items-center gap-4 text-stone-600">
-              <span className="flex items-center gap-1">
-                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                AI Safety Moderation
-              </span>
-              <span className="flex items-center gap-1">
-                <Printer className="w-3.5 h-3.5 text-emerald-600" />
-                1-Click Printable Prayer List
-              </span>
-              <span className="flex items-center gap-1">
-                <Globe className="w-3.5 h-3.5 text-indigo-600" />
-                Global Network Wall
-              </span>
-            </div>
+        <footer className="border-t border-stone-200 pt-6 pb-24 md:pb-6 px-4 text-xs text-stone-500 no-print">
+          <div className="max-w-6xl mx-auto text-center">
+            <a href="/" className="hover:text-stone-800">
+              <span className="font-serif-church font-bold text-stone-700">PrayerKeeper</span> by Church Website Pros
+            </a>
           </div>
         </footer>
       </div>
