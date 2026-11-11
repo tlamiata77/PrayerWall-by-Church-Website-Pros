@@ -62,7 +62,7 @@ export const EditPrayerModal: React.FC<EditPrayerModalProps> = ({ request, onClo
       isAnonymous: form.isAnonymous,
       title: form.title.trim(),
       content: form.content.trim(),
-      bulletinSummary: form.bulletinSummary?.trim() || form.title.trim(),
+      bulletinSummary: form.title.trim(), // the title is what prints
       category: form.category,
       visibility: form.visibility,
       isUrgent: form.isUrgent,
@@ -131,16 +131,6 @@ export const EditPrayerModal: React.FC<EditPrayerModalProps> = ({ request, onClo
           <div>
             <label className={label}>Details</label>
             <textarea rows={4} className={input} value={form.content} onChange={(e) => set('content', e.target.value)} />
-          </div>
-
-          <div>
-            <label className={label}>Prayer list line (what prints on the printable prayer list)</label>
-            <input
-              className={input}
-              value={form.bulletinSummary || ''}
-              placeholder={form.title}
-              onChange={(e) => set('bulletinSummary', e.target.value)}
-            />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

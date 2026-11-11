@@ -49,7 +49,6 @@ export const PrintableBulletinBuilder: React.FC = () => {
     currentChurch,
     filteredChurchRequests,
     updateBulletinSummary,
-    bulkUpdateBulletinSummaries,
     load75WeeklyRequests,
     archiveLastWeeksPrayersForPrint,
     restoreAllPrintArchives,
@@ -94,7 +93,6 @@ export const PrintableBulletinBuilder: React.FC = () => {
   // Typography & Density controls for high volume
   const [fontSize, setFontSize] = useState<'micro' | 'dense' | 'compact' | 'regular'>('compact');
   const [spacing, setSpacing] = useState<'tight' | 'compact' | 'normal'>('compact');
-  const [useCondensedSummaries, setUseCondensedSummaries] = useState(true);
   
   // Category selection (all selected by default)
   const [selectedCategories, setSelectedCategories] = useState<string[]>([
@@ -121,7 +119,6 @@ export const PrintableBulletinBuilder: React.FC = () => {
       setLayoutMode('columns_3');
       setFontSize('dense');
       setSpacing('tight');
-      setUseCondensedSummaries(true);
       setIncludePrivateRequests(false);
       setIncludeContactInfo(false);
       setCustomTitle(`${currentChurch.name} Intercessory Prayer Directory`);
@@ -129,7 +126,6 @@ export const PrintableBulletinBuilder: React.FC = () => {
       setLayoutMode('table_ledger');
       setFontSize('dense');
       setSpacing('tight');
-      setUseCondensedSummaries(true);
       setIncludePrivateRequests(false);
       setIncludeContactInfo(false);
       setCustomTitle(`${currentChurch.name} Prayer Ledger & Roster`);
@@ -137,7 +133,6 @@ export const PrintableBulletinBuilder: React.FC = () => {
       setLayoutMode('inline_flow');
       setFontSize('micro');
       setSpacing('tight');
-      setUseCondensedSummaries(true);
       setIncludePrivateRequests(false);
       setIncludeContactInfo(false);
       setCustomTitle(`${currentChurch.name} Weekly Congregational Prayer Points`);
@@ -145,7 +140,6 @@ export const PrintableBulletinBuilder: React.FC = () => {
       setLayoutMode('columns_4');
       setFontSize('micro');
       setSpacing('tight');
-      setUseCondensedSummaries(true);
       setIncludePrivateRequests(false);
       setIncludeContactInfo(false);
       setCustomTitle(`${currentChurch.name} Pocket Prayer List`);
@@ -153,7 +147,6 @@ export const PrintableBulletinBuilder: React.FC = () => {
       setLayoutMode('columns_2');
       setFontSize('compact');
       setSpacing('compact');
-      setUseCondensedSummaries(true);
       setIncludePrivateRequests(false);
       setIncludeContactInfo(false);
       setCustomTitle(`${currentChurch.name} Prayer List`);
@@ -161,7 +154,6 @@ export const PrintableBulletinBuilder: React.FC = () => {
       setLayoutMode('table_ledger');
       setFontSize('compact');
       setSpacing('compact');
-      setUseCondensedSummaries(false);
       setIncludePrivateRequests(true);
       setIncludeContactInfo(true);
       setCustomTitle(`CONFIDENTIAL: Pastoral Care Team Prayer Roster`);
@@ -329,7 +321,8 @@ export const PrintableBulletinBuilder: React.FC = () => {
 
   // Helper to extract clean dignified summary text without date strings
   const getItemSummaryText = (item: PrayerRequest) => {
-    let summary = useCondensedSummaries && item.bulletinSummary ? item.bulletinSummary : item.title;
+    // The prayer's title is what prints (the AI writes a short one when a request is shared)
+    let summary = item.title;
     if (!summary || isDateString(summary)) {
       summary = item.content && !isDateString(item.content) ? item.content : 'Prayer Request';
     }
@@ -380,39 +373,6 @@ export const PrintableBulletinBuilder: React.FC = () => {
     window.print();
   };
 
-  // AI Bulk Compression for 75+ items
-  const handleAIBulkCompress = async () => {
-    setIsPolishingAI(true);
-    setAiCompressedCount(null);
-    try {
-      const itemsToCompress = activeNeeds.map((r) => ({
-        id: r.id,
-        requesterName: r.requesterName,
-        title: r.title,
-        content: r.content,
-      }));
-
-      const response = await fetch('/api/bulk-compress-bulletin', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: itemsToCompress }),
-      });
-
-      if (response.ok) {
-        const json = await response.json();
-        if (json.results && Array.isArray(json.results)) {
-          bulkUpdateBulletinSummaries(json.results);
-          setAiCompressedCount(json.results.length);
-          setTimeout(() => setAiCompressedCount(null), 4000);
-        }
-      }
-    } catch (err) {
-      console.warn('Bulk compress error:', err);
-    } finally {
-      setIsPolishingAI(false);
-    }
-  };
-
   // Copy Formatted Text for Word / Email
   const handleCopyText = () => {
     let text = `========================================================\n`;
@@ -430,8 +390,7 @@ export const PrintableBulletinBuilder: React.FC = () => {
         if (items.length === 0) return;
         text += `\n${cat.toUpperCase()} (${items.length}): `;
         const lineParts = items.map((item) => {
-          const body = useCondensedSummaries && item.bulletinSummary ? item.bulletinSummary : item.title;
-          return `${item.requesterName} (${body})`;
+          return `${item.requesterName} (${getItemSummaryText(item)})`;
         });
         text += `${lineParts.join('; ')}.\n`;
       });
@@ -442,8 +401,7 @@ export const PrintableBulletinBuilder: React.FC = () => {
 
         text += `\n--- ${cat.toUpperCase()} (${items.length}) ---\n`;
         items.forEach((item) => {
-          const body = useCondensedSummaries && item.bulletinSummary ? item.bulletinSummary : item.title;
-          text += `• ${item.requesterName} — ${body}\n`;
+          text += `• ${item.requesterName} — ${getItemSummaryText(item)}\n`;
           if (includeContactInfo && item.requesterEmail) {
             text += `  Contact: ${item.requesterEmail} ${item.requesterPhone ? `| ${item.requesterPhone}` : ''}\n`;
           }
@@ -454,7 +412,7 @@ export const PrintableBulletinBuilder: React.FC = () => {
     if (includeAnsweredPraises && praises.length > 0) {
       text += `\n--- PRAISES & ANSWERED PRAYERS (${praises.length}) ---\n`;
       praises.forEach((item) => {
-        text += `• [PRAISE] ${item.requesterName}: ${item.answeredUpdate || item.bulletinSummary || item.title}\n`;
+        text += `• [PRAISE] ${item.requesterName}: ${getItemSummaryText(item)}\n`;
       });
     }
 
@@ -554,17 +512,6 @@ export const PrintableBulletinBuilder: React.FC = () => {
               <span>Load 75 Requests Demo</span>
             </button>
             )}
-
-            {/* AI Bulk Compress to 1-Liners */}
-            <button
-              onClick={handleAIBulkCompress}
-              disabled={isPolishingAI}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-stone-950 rounded-lg text-xs font-bold transition-all cursor-pointer shadow-sm disabled:opacity-50"
-              title="AI condenses all requests into concise 3-7 word prayer lines for maximum page compression"
-            >
-              <Sparkles className={`w-3.5 h-3.5 ${isPolishingAI ? 'animate-spin' : ''}`} />
-              <span>{isPolishingAI ? 'AI Compressing...' : '⚡ AI 1-Liners'}</span>
-            </button>
 
             {/* AI Auto-Categorize the prayer list */}
             <button
@@ -748,7 +695,7 @@ export const PrintableBulletinBuilder: React.FC = () => {
           <div className="bg-emerald-950/80 border border-emerald-500/50 text-emerald-200 text-xs px-3.5 py-2 rounded-xl flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-emerald-400" />
             <span>
-              Successfully compressed {aiCompressedCount} prayer requests into clean, high-density 1-line prayer list entries!
+              Organized {aiCompressedCount} prayer requests into their categories.
             </span>
           </div>
         )}
@@ -1140,15 +1087,6 @@ export const PrintableBulletinBuilder: React.FC = () => {
           {/* Column 3: Content Toggles */}
           <div className="space-y-1.5">
             <span className="font-semibold text-stone-700 block">Space Savers</span>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={useCondensedSummaries}
-                onChange={(e) => setUseCondensedSummaries(e.target.checked)}
-                className="rounded text-emerald-600 focus:ring-emerald-500"
-              />
-              <span className="font-medium text-stone-800">Use 1-line bullet points</span>
-            </label>
             <div className="bg-stone-50 border border-stone-200 rounded-lg p-2 space-y-1">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-stone-800">Prayer Checkboxes:</span>
@@ -1331,7 +1269,7 @@ export const PrintableBulletinBuilder: React.FC = () => {
                     {praises.map((praise, idx) => (
                       <span key={praise.id}>
                         <strong className="font-semibold text-emerald-950">{praise.requesterName}</strong>
-                        {' '}({praise.answeredUpdate || getItemSummaryText(praise)})
+                        {' '}({getItemSummaryText(praise)})
                         {idx < praises.length - 1 ? '; ' : '.'}
                       </span>
                     ))}
@@ -1412,7 +1350,7 @@ export const PrintableBulletinBuilder: React.FC = () => {
                             {praise.requesterName}
                           </td>
                           <td className="p-1 px-2 text-stone-800">
-                            {praise.answeredUpdate || getItemSummaryText(praise)}
+                            {getItemSummaryText(praise)}
                           </td>
                         </tr>
                       ))}
@@ -1531,7 +1469,7 @@ export const PrintableBulletinBuilder: React.FC = () => {
                           {praise.requesterName}
                         </strong>
                         <span className="text-stone-500 mx-1">—</span>
-                        <span>{praise.answeredUpdate || getItemSummaryText(praise)}</span>
+                        <span>{getItemSummaryText(praise)}</span>
                       </li>
                     ))}
                   </ul>
