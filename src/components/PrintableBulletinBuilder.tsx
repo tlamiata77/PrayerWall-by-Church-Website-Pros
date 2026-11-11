@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { RequestCategory, PrayerRequest } from '../types';
 import { isDateString } from '../utils/csvParser';
@@ -290,7 +290,7 @@ export const PrintableBulletinBuilder: React.FC = () => {
   // (a short list used to print in the top half of the page with the rest left blank).
   // The preview sheet is exactly the printed width, so what fits here fits on paper; a small
   // allowance covers browser print differences.
-  useLayoutEffect(() => {
+  const runFit = () => {
     const el = sheetContentRef.current;
     if (!el) return;
     const MAX_GROW = 1.8; // never blow a very short list up past this
@@ -299,6 +299,11 @@ export const PrintableBulletinBuilder: React.FC = () => {
       el.style.zoom = String(z);
       return el.getBoundingClientRect().height;
     };
+    // Measure the sheet as it prints: the per-line buttons (archive from print, etc.) only
+    // show on screen, and left in they made the preview taller, so the text shrank too much
+    const screenOnly = Array.from(el.querySelectorAll<HTMLElement>('button, .no-print, [class*="print:hidden"]'));
+    const savedDisplay = screenOnly.map((n) => n.style.display);
+    screenOnly.forEach((n) => (n.style.display = 'none'));
     let best = 1;
     if (fitToOnePage) {
       const fitsAtOne = heightAt(1) <= available;
@@ -315,9 +320,35 @@ export const PrintableBulletinBuilder: React.FC = () => {
       }
       best = Math.floor(lo * 1000) / 1000;
     }
+    screenOnly.forEach((n, i) => (n.style.display = savedDisplay[i]));
     el.style.zoom = String(best);
-    if (Math.abs(best - fitScale) > 0.001) setFitScale(best);
+    setFitScale((prev) => (Math.abs(best - prev) > 0.001 ? best : prev));
+  };
+  const runFitRef = useRef(runFit);
+  runFitRef.current = runFit;
+
+  useLayoutEffect(() => {
+    runFit();
   });
+
+  // The sheet changes size when the church's fonts or logo finish loading, and when the window
+  // is resized, without anything re-rendering; measure again then, and right before printing,
+  // so the fit is never computed from a half-loaded page
+  useEffect(() => {
+    const refit = () => runFitRef.current();
+    const el = sheetContentRef.current;
+    document.fonts?.addEventListener?.('loadingdone', refit);
+    document.fonts?.ready.then(refit);
+    window.addEventListener('resize', refit);
+    window.addEventListener('beforeprint', refit);
+    el?.addEventListener('load', refit, true); // images inside the sheet (logo)
+    return () => {
+      document.fonts?.removeEventListener?.('loadingdone', refit);
+      window.removeEventListener('resize', refit);
+      window.removeEventListener('beforeprint', refit);
+      el?.removeEventListener('load', refit, true);
+    };
+  }, []);
 
   // Helper to extract clean dignified summary text without date strings
   const getItemSummaryText = (item: PrayerRequest) => {
@@ -1165,7 +1196,7 @@ export const PrintableBulletinBuilder: React.FC = () => {
       {/* Live Printable Sheet Preview Container (Rendered exactly for print and screen) */}
       <div className="bg-stone-300/40 p-2 sm:p-6 rounded-2xl flex justify-center-safe overflow-x-auto no-print-bg print:p-0 print:bg-transparent print:block print:overflow-visible">
         <div
-          className={`printable-area ${inkMode === 'black' ? 'ink-black' : 'ink-color'} bg-white text-stone-900 shadow-xl shrink-0 box-border transition-all border border-stone-200 ${
+          className={`printable-area ${inkMode === 'black' ? 'ink-black' : 'ink-color'} bg-white text-stone-900 shadow-xl shrink-0 box-border border border-stone-200 ${
             fontSizeClasses[fontSize]
           }`}
           style={

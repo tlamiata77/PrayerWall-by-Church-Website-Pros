@@ -14,6 +14,15 @@
   }
 }
 
+/* Keep-together rules apply on screen too, so the preview sheet breaks its columns exactly
+   like the printout (the Fit to 1 page measurement depends on it) */
+.page-break-inside-avoid {
+  break-inside: avoid;
+}
+.page-break-after-avoid {
+  break-after: avoid;
+}
+
 @media print {
   /* Size and margin are set by the bulletin builder for the chosen paper */
   @page {
@@ -40,6 +49,20 @@
     color: #1a1a1a !important;
     margin: 0 !important;
     padding: 0 !important;
+  }
+
+  /* The app's screen-height wrappers and the room left at the bottom for the floating phone
+     button pushed the printout past one sheet, moving its last line onto a second page */
+  .min-h-screen {
+    min-height: 0 !important;
+  }
+  main {
+    padding-bottom: 0 !important;
+  }
+
+  /* Body text size only: the root (html) size stays as on screen, so rem-based sizes and
+     spacing print at the same scale as the preview that Fit to 1 page measured */
+  body {
     font-size: 11pt !important;
     line-height: 1.4 !important;
   }
