@@ -62,7 +62,7 @@ const layoutFromChurchDefault = (d?: WallLayoutType): CardLayout =>
 
 interface PrayerWallProps {
   forceSingleColumn?: boolean;
-  /** Show the floating "Share a Prayer" button on phones (the app, not the embed) */
+  /** Show the floating "Submit a Prayer Request" button on phones (the app, not the embed) */
   floatingShareButton?: boolean;
   overrideLayout?: WallLayoutType;
   /** Leave out the church name / scripture card (website embed "wall only") */
@@ -581,7 +581,7 @@ export const PrayerWall: React.FC<PrayerWallProps> = ({ forceSingleColumn = fals
               style={currentTheme.btnPrimaryStyle}
               className="px-4 py-2 rounded-xl text-sm font-semibold cursor-pointer"
             >
-              Share a Prayer Request
+              Submit a Prayer Request
             </button>
             {isStaff && filteredChurchRequests.length === 0 && (
               <button
@@ -684,7 +684,7 @@ export const PrayerWall: React.FC<PrayerWallProps> = ({ forceSingleColumn = fals
           className="md:hidden fixed bottom-4 right-4 z-30 flex items-center gap-2 pl-4 pr-5 py-3.5 rounded-full shadow-lg font-semibold text-sm cursor-pointer active:scale-95 transition-transform"
         >
           <Plus className="w-5 h-5" />
-          Share a Prayer
+          Submit a Prayer Request
         </button>
       )}
 

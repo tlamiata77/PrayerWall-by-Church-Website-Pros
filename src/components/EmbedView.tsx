@@ -49,7 +49,7 @@ export const EmbedView: React.FC = () => {
             className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-semibold text-sm shadow-xs cursor-pointer hover:opacity-95"
           >
             <PlusCircle className="w-4 h-4" />
-            Share a Prayer Request
+            Submit a Prayer Request
           </button>
         )}
         <button

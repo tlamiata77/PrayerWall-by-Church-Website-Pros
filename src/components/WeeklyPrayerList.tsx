@@ -15,7 +15,7 @@ const CATEGORY_ORDER = [
 ];
 
 const lineFor = (r: PrayerRequest) => {
-  let text = r.bulletinSummary || r.title;
+  let text = r.title;
   if (!text || isDateString(text)) text = r.title || r.content;
   return text.replace(/^\[[^\]]+\]\s*/, '').trim();
 };
@@ -98,7 +98,7 @@ export const WeeklyPrayerList: React.FC<{ onBack: () => void }> = ({ onBack }) =
                 <ul className="space-y-1">
                   {praises.map((r) => (
                     <li key={r.id} className="break-inside-avoid">
-                      <strong>{r.requesterName}</strong> — {r.answeredUpdate || lineFor(r)}
+                      <strong>{r.requesterName}</strong> — {lineFor(r)}
                     </li>
                   ))}
                 </ul>

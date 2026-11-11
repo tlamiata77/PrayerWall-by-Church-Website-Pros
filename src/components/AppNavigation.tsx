@@ -185,14 +185,14 @@ export const AppNavigation: React.FC = () => {
             </p>
           </div>
 
-          {/* Share a prayer (on phones this is the floating button at the bottom) */}
+          {/* Submit a prayer (on phones this is the floating button at the bottom) */}
           <button
             onClick={() => setSubmitModalOpen(true)}
             style={currentTheme.btnPrimaryStyle}
             className="hidden md:flex items-center gap-1.5 px-4 py-2 rounded-xl font-semibold text-sm shadow-xs cursor-pointer hover:opacity-95 shrink-0"
           >
             <Plus className="w-4 h-4" />
-            <span>Share a Prayer Request</span>
+            <span>Submit a Prayer Request</span>
           </button>
 
           {currentUser ? (
