@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import type { Session } from '@supabase/supabase-js';
-import { Church, PrayerRequest, UserRole, VisibilityType, RequestCategory, ModerationStatus, AppTab, UserAccount, DirectoryMember } from '../types';
+import { Church, PrayerRequest, UserRole, VisibilityType, RequestCategory, ModerationStatus, AppTab, UserAccount, DirectoryMember, DirectoryContact } from '../types';
 import { SAMPLE_75_WEEKLY_REQUESTS } from '../data/sample75Requests';
 import { isDateString, parseDateToISO, healPrayerRequest } from '../utils/csvParser';
 import {
@@ -12,6 +12,10 @@ import {
   profileFromRow,
   directoryFromRow,
   directoryToRow,
+  directoryPrivateRow,
+  publishedContacts,
+  STORAGE_PHOTO_PREFIX,
+  DIRECTORY_PHOTO_BUCKET,
   newId,
   openedFromPasswordReset,
 } from '../lib/supabase';
@@ -101,9 +105,14 @@ interface AppContextType {
   notifications: AdminNotification[];
   markNotificationsRead: () => Promise<void>;
   resubmitPrayerRequest: (requestId: string, updatedContent?: string, isUrgent?: boolean) => void;
-  addDirectoryMember: (member: Omit<DirectoryMember, 'id' | 'createdAt'>) => string;
+  /** Adds a person or family listing; published contacts are worked out from privateContacts */
+  addDirectoryMember: (
+    member: Omit<DirectoryMember, 'id' | 'createdAt' | 'contacts'> & { privateContacts: DirectoryContact[] }
+  ) => string;
   updateDirectoryMember: (id: string, updates: Partial<DirectoryMember>) => void;
   deleteDirectoryMember: (id: string) => void;
+  /** Saves a (cropped) directory photo to the church's photo store; returns the value for photoUrl */
+  uploadDirectoryPhoto: (photo: Blob) => Promise<{ photoUrl: string; photoSrc: string }>;
   addPrayerRequest: (data: {
     title: string;
     content: string;
@@ -313,12 +322,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const loadAll = useCallback(async (activeSession: Session | null) => {
     try {
       const signedIn = Boolean(activeSession);
-      const [churchRows, requestRows, privateRows, directoryRows, profileRows] = await Promise.all([
+      const [churchRows, requestRows, privateRows, directoryRows, profileRows, directoryPrivateRows] = await Promise.all([
         fetchAllRows('churches', 'name'),
         fetchAllRows('prayer_requests'),
         signedIn ? fetchAllRows('prayer_request_private', 'request_id') : Promise.resolve([]),
         signedIn ? fetchAllRows('directory_members') : Promise.resolve([]),
         signedIn ? fetchAllRows('profiles') : Promise.resolve([]),
+        // Only staff and the listed member can read these; before the directory update is
+        // installed the table doesn't exist yet, which just means no private contacts
+        signedIn ? fetchAllRows('directory_member_private', 'member_id').catch(() => []) : Promise.resolve([]),
       ]);
 
       const loadedChurches = churchRows.map(churchFromRow).sort((a, b) => a.name.localeCompare(b.name));
@@ -333,7 +345,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           prayedByMe: prayed.has(r.id as string),
         }))
       );
-      setDirectory(directoryRows.map(directoryFromRow));
+      const directoryPrivateById = new Map(directoryPrivateRows.map((p) => [p.member_id as string, p]));
+      const loadedDirectory = directoryRows.map((r) => directoryFromRow(r, directoryPrivateById.get(r.id as string)));
+      setDirectory(loadedDirectory);
+      resolveDirectoryPhotos(loadedDirectory).then((srcById) => {
+        if (srcById.size > 0) setDirectory((prev) => prev.map((m) => (srcById.has(m.id) ? { ...m, photoSrc: srcById.get(m.id) } : m)));
+      });
       const loadedUsers = profileRows.map(profileFromRow);
       setUsers(loadedUsers);
 
@@ -670,8 +687,63 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Directory
   // ---------------------------------------------------------------------------
 
-  const addDirectoryMember = (memberData: Omit<DirectoryMember, 'id' | 'createdAt'>) => {
-    const member: DirectoryMember = { ...memberData, id: newId('dir'), createdAt: new Date().toISOString() };
+  // Photos in the photo store are private, so they are shown through signed links
+  const resolveDirectoryPhotos = async (members: DirectoryMember[]): Promise<Map<string, string>> => {
+    const stored = members.filter((m) => m.photoUrl?.startsWith(STORAGE_PHOTO_PREFIX));
+    const srcById = new Map<string, string>();
+    for (let i = 0; i < stored.length; i += 100) {
+      const chunk = stored.slice(i, i + 100);
+      const { data, error } = await supabase.storage
+        .from(DIRECTORY_PHOTO_BUCKET)
+        .createSignedUrls(chunk.map((m) => m.photoUrl.slice(STORAGE_PHOTO_PREFIX.length)), 60 * 60 * 24);
+      if (error) {
+        console.warn('Could not load directory photos:', error.message);
+        continue;
+      }
+      (data || []).forEach((d, idx) => {
+        if (d.signedUrl) srcById.set(chunk[idx].id, d.signedUrl);
+      });
+    }
+    return srcById;
+  };
+
+  const removeStoredPhoto = (photoUrl?: string) => {
+    if (!photoUrl?.startsWith(STORAGE_PHOTO_PREFIX)) return;
+    supabase.storage
+      .from(DIRECTORY_PHOTO_BUCKET)
+      .remove([photoUrl.slice(STORAGE_PHOTO_PREFIX.length)])
+      .then(({ error }) => {
+        if (error) console.warn('Could not remove the old photo:', error.message);
+      });
+  };
+
+  const uploadDirectoryPhoto = async (photo: Blob) => {
+    const path = `${currentChurch.id}/${newId('photo')}.jpg`;
+    const { error } = await supabase.storage
+      .from(DIRECTORY_PHOTO_BUCKET)
+      .upload(path, photo, { contentType: 'image/jpeg', upsert: false });
+    if (error) throw error;
+    return { photoUrl: `${STORAGE_PHOTO_PREFIX}${path}`, photoSrc: URL.createObjectURL(photo) };
+  };
+
+  const savePrivateContacts = (memberId: string, churchId: string, contacts: DirectoryContact[]) =>
+    supabase
+      .from('directory_member_private')
+      .upsert(directoryPrivateRow(memberId, churchId, contacts), { onConflict: 'member_id' })
+      .then(({ error }) => {
+        if (error) {
+          reportError('Saving directory contact details', error);
+          refreshData();
+        }
+      });
+
+  const addDirectoryMember: AppContextType['addDirectoryMember'] = (memberData) => {
+    const member: DirectoryMember = {
+      ...memberData,
+      contacts: publishedContacts(memberData.privateContacts),
+      id: newId('dir'),
+      createdAt: new Date().toISOString(),
+    };
     setDirectory((prev) => [member, ...prev]);
     supabase
       .from('directory_members')
@@ -680,14 +752,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (error) {
           reportError('Adding directory member', error);
           refreshData();
+          return;
         }
+        savePrivateContacts(member.id, member.churchId, memberData.privateContacts);
       });
     return member.id;
   };
 
   const updateDirectoryMember = (id: string, updates: Partial<DirectoryMember>) => {
-    setDirectory((prev) => prev.map((m) => (m.id === id ? { ...m, ...updates } : m)));
-    const { id: _ignored, ...rest } = updates;
+    const existing = directory.find((m) => m.id === id);
+    const changes: Partial<DirectoryMember> = { ...updates };
+    if (updates.privateContacts) changes.contacts = publishedContacts(updates.privateContacts);
+    if (updates.photoUrl !== undefined && existing && existing.photoUrl !== updates.photoUrl) {
+      removeStoredPhoto(existing.photoUrl);
+    }
+    setDirectory((prev) => prev.map((m) => (m.id === id ? { ...m, ...changes } : m)));
+    const { id: _ignored, ...rest } = changes;
     supabase
       .from('directory_members')
       .update(directoryToRow(rest))
@@ -696,11 +776,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (error) {
           reportError('Updating directory member', error);
           refreshData();
+          return;
         }
+        if (updates.privateContacts && existing) savePrivateContacts(id, existing.churchId, updates.privateContacts);
       });
   };
 
   const deleteDirectoryMember = (id: string) => {
+    const existing = directory.find((m) => m.id === id);
     setDirectory((prev) => prev.filter((m) => m.id !== id));
     supabase
       .from('directory_members')
@@ -710,7 +793,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (error) {
           reportError('Removing directory member', error);
           refreshData();
+          return;
         }
+        removeStoredPhoto(existing?.photoUrl);
       });
   };
 
@@ -1370,6 +1455,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addDirectoryMember,
         updateDirectoryMember,
         deleteDirectoryMember,
+        uploadDirectoryPhoto,
         addPrayerRequest,
         incrementPrayerCount,
         updateRequestModeration,

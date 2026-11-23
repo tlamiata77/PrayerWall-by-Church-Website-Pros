@@ -1,7 +1,7 @@
-import { Church, DirectoryMember, PrayerRequest } from '../types';
+import { Church, LegacyDirectoryMember, PrayerRequest } from '../types';
 import { INITIAL_CHURCHES, INITIAL_REQUESTS } from '../data/initialData';
 import { INITIAL_DIRECTORY_MEMBERS } from '../data/initialDirectory';
-import { supabase, churchToRow, requestToRows, directoryToRow } from '../lib/supabase';
+import { supabase, churchToRow, requestToRows, directoryToRow, directoryPrivateRow, publishedContacts } from '../lib/supabase';
 
 /**
  * One-time move of data the old version of the app kept only in this browser's
@@ -20,7 +20,7 @@ export interface BrowserDataScan {
   source: 'browser' | 'starter';
   churches: BrowserChurchSummary[];
   requests: PrayerRequest[];
-  directory: DirectoryMember[];
+  directory: LegacyDirectoryMember[];
 }
 
 // Demo churches that shipped with the prototype; unchecked by default
@@ -40,7 +40,7 @@ const readArray = <T,>(key: string): T[] | null => {
 export const scanBrowserData = (existingChurchIds: Set<string>): BrowserDataScan => {
   const storedChurches = readArray<Church>('gracewall_churches');
   const storedRequests = readArray<PrayerRequest>('gracewall_requests');
-  const storedDirectory = readArray<DirectoryMember>('gracewall_directory');
+  const storedDirectory = readArray<LegacyDirectoryMember>('gracewall_directory');
 
   const source = storedChurches || storedRequests ? 'browser' : 'starter';
   const churches = storedChurches || INITIAL_CHURCHES;
@@ -128,11 +128,36 @@ export const importBrowserData = async (
 
   const directory = scan.directory.filter((m) => chosen.has(m.churchId));
   if (directory.length > 0) {
+    // Old entries had one email and phone, always shown; keep them published
+    const withContacts = directory.map((m) => {
+      const contacts =
+        m.email || m.phone
+          ? [{ name: m.name, phone: m.phone || '', email: m.email || '', showPhone: Boolean(m.phone), showEmail: Boolean(m.email) }]
+          : [];
+      return { m, contacts };
+    });
     const { error } = await supabase.from('directory_members').upsert(
-      directory.map((m) => directoryToRow({ ...m, createdAt: validDate(m.createdAt) || new Date().toISOString() })),
+      withContacts.map(({ m, contacts }) =>
+        directoryToRow({
+          ...m,
+          email: undefined,
+          phone: undefined,
+          contacts: publishedContacts(contacts),
+          createdAt: validDate(m.createdAt) || new Date().toISOString(),
+        })
+      ),
       { onConflict: 'id', ignoreDuplicates: true }
     );
     if (error) throw error;
+    const privateRows = withContacts
+      .filter(({ contacts }) => contacts.length > 0)
+      .map(({ m, contacts }) => directoryPrivateRow(m.id, m.churchId, contacts));
+    if (privateRows.length > 0) {
+      const { error: privError } = await supabase
+        .from('directory_member_private')
+        .upsert(privateRows, { onConflict: 'member_id', ignoreDuplicates: true });
+      if (privError) throw privError;
+    }
   }
 
   return { churches: churches.length, requests: requests.length, directory: directory.length };

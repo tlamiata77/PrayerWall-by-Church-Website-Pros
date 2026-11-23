@@ -1,6 +1,6 @@
-import { DirectoryMember } from '../types';
+import { LegacyDirectoryMember } from '../types';
 
-export const INITIAL_DIRECTORY_MEMBERS: DirectoryMember[] = [
+export const INITIAL_DIRECTORY_MEMBERS: LegacyDirectoryMember[] = [
   // Grace Fellowship Church
   {
     id: 'dir-grace-1',
