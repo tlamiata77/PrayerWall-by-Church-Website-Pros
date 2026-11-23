@@ -427,7 +427,7 @@ export const ChurchDirectory: React.FC = () => {
 
       {/* Photo cards */}
       {layoutMode === 'grid' && filteredMembers.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {filteredMembers.map((m) => (
             <div key={m.id} className="bg-white rounded-2xl border border-stone-200 shadow-xs overflow-hidden flex flex-col">
               <button
