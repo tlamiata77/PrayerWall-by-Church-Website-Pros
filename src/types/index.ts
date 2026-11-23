@@ -117,15 +117,43 @@ export type DirectoryGroup =
   | 'Worship & Tech'
   | 'Congregation Members';
 
+/** One person in a directory listing, with their publish choices (staff and the member only) */
+export interface DirectoryContact {
+  name: string;
+  phone: string;
+  email: string;
+  showPhone: boolean;
+  showEmail: boolean;
+}
+
+/** What every approved member sees for a person: only the details they chose to publish */
+export interface PublishedContact {
+  name: string;
+  phone?: string;
+  email?: string;
+}
+
+/** Directory entries saved by the old browser-only version (single email and phone) */
+export type LegacyDirectoryMember = Omit<DirectoryMember, 'contacts'> & { contacts?: PublishedContact[] };
+
+/** A directory listing: one person or a whole family, with one photo */
 export interface DirectoryMember {
   id: string;
   churchId: string;
   name: string;
   roleTitle: string;
   group: DirectoryGroup;
-  email: string;
-  phone: string;
+  /** Published phone numbers and emails, one entry per person in the listing */
+  contacts: PublishedContact[];
+  /** Every person's details and publish choices; loaded only for staff and the member themselves */
+  privateContacts?: DirectoryContact[];
+  /** Older single-contact fields, only read when importing old browser data */
+  email?: string;
+  phone?: string;
+  /** A web address, or "storage:<path>" for photos uploaded to the directory photo store */
   photoUrl: string;
+  /** Displayable address for photoUrl (a signed link for stored photos) */
+  photoSrc?: string;
   address?: string;
   bio?: string;
   familyMembers?: string;

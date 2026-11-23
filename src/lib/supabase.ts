@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { Church, DirectoryMember, DirectoryGroup, PrayerRequest, UserAccount } from '../types';
+import { Church, DirectoryContact, DirectoryMember, DirectoryGroup, PrayerRequest, PublishedContact, UserAccount } from '../types';
 
 // The publishable key is designed to be public: every visitor's browser receives it,
 // and Row Level Security in supabase/migrations decides what each person may read or change.
@@ -157,14 +157,52 @@ export const profileFromRow = (r: Row): UserAccount & { approved: boolean } => (
 
 // ---------- directory ----------
 
-export const directoryFromRow = (r: Row): DirectoryMember => ({
+export const STORAGE_PHOTO_PREFIX = 'storage:';
+export const DIRECTORY_PHOTO_BUCKET = 'directory-photos';
+
+/** The published part of each contact: what every approved member may see */
+export const publishedContacts = (contacts: DirectoryContact[]): PublishedContact[] =>
+  contacts
+    .filter((c) => c.name.trim() || c.phone.trim() || c.email.trim())
+    .map((c) => {
+      const out: PublishedContact = { name: c.name.trim() };
+      if (c.showPhone && c.phone.trim()) out.phone = c.phone.trim();
+      if (c.showEmail && c.email.trim()) out.email = c.email.trim();
+      return out;
+    });
+
+const toPublishedContacts = (value: unknown): PublishedContact[] =>
+  Array.isArray(value)
+    ? value
+        .filter((c): c is Row => Boolean(c) && typeof c === 'object')
+        .map((c) => ({
+          name: String(c.name ?? ''),
+          ...(c.phone ? { phone: String(c.phone) } : {}),
+          ...(c.email ? { email: String(c.email) } : {}),
+        }))
+    : [];
+
+const toDirectoryContacts = (value: unknown): DirectoryContact[] =>
+  Array.isArray(value)
+    ? value
+        .filter((c): c is Row => Boolean(c) && typeof c === 'object')
+        .map((c) => ({
+          name: String(c.name ?? ''),
+          phone: String(c.phone ?? ''),
+          email: String(c.email ?? ''),
+          showPhone: Boolean(c.showPhone),
+          showEmail: Boolean(c.showEmail),
+        }))
+    : [];
+
+export const directoryFromRow = (r: Row, priv?: Row): DirectoryMember => ({
   id: r.id,
   churchId: r.church_id,
   name: r.name,
   roleTitle: r.role_title,
   group: r.group_name as DirectoryGroup,
-  email: r.email,
-  phone: r.phone,
+  contacts: toPublishedContacts(r.contacts),
+  privateContacts: priv ? toDirectoryContacts(priv.contacts) : undefined,
   photoUrl: r.photo_url,
   address: orUndefined(r.address),
   bio: orUndefined(r.bio),
@@ -180,8 +218,7 @@ const DIRECTORY_COLUMNS: Record<string, string> = {
   name: 'name',
   roleTitle: 'role_title',
   group: 'group_name',
-  email: 'email',
-  phone: 'phone',
+  contacts: 'contacts',
   photoUrl: 'photo_url',
   address: 'address',
   bio: 'bio',
@@ -196,7 +233,23 @@ export const directoryToRow = (m: Partial<DirectoryMember>): Row => {
   for (const [key, col] of Object.entries(DIRECTORY_COLUMNS)) {
     if (key in m) row[col] = (m as Row)[key] ?? null;
   }
+  if (row.contacts === null) row.contacts = [];
   return row;
 };
+
+/** The staff-only row holding every contact with its publish choices */
+export const directoryPrivateRow = (memberId: string, churchId: string, contacts: DirectoryContact[]): Row => ({
+  member_id: memberId,
+  church_id: churchId,
+  contacts: contacts
+    .filter((c) => c.name.trim() || c.phone.trim() || c.email.trim())
+    .map((c) => ({
+      name: c.name.trim(),
+      phone: c.phone.trim(),
+      email: c.email.trim(),
+      showPhone: c.showPhone,
+      showEmail: c.showEmail,
+    })),
+});
 
 export const newId = (prefix: string) => `${prefix}-${crypto.randomUUID().replace(/-/g, '')}`;
