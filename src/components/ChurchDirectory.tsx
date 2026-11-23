@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { getChurchTheme } from '../utils/theme';
 import { PhotoCropper } from './PhotoCropper';
+import { DirectoryPrintSheet } from './DirectoryPrintSheet';
 import {
   Users,
   Search,
@@ -507,40 +508,9 @@ export const ChurchDirectory: React.FC = () => {
         </div>
       )}
 
-      {/* Printable booklet */}
+      {/* Printable photo directory */}
       {layoutMode === 'printable' && filteredMembers.length > 0 && (
-        <div className="bg-white p-5 sm:p-8 rounded-2xl border border-stone-200 printable-area ink-color">
-          <div className="border-b-2 border-stone-900 pb-3 mb-4 text-center">
-            <h1 className="font-serif-church text-2xl font-bold text-stone-900">{currentChurch.name} Directory</h1>
-            <p className="text-xs text-stone-600 mt-1">
-              {[currentChurch.address, currentChurch.city && `${currentChurch.city}, ${currentChurch.state}`, currentChurch.phone].filter(Boolean).join(' • ')}
-            </p>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
-            {filteredMembers.map((m) => (
-              <div key={m.id} className="flex items-start gap-3 page-break-inside-avoid break-inside-avoid">
-                {photoBox(m, 'w-28 aspect-[4/3] rounded-md shrink-0 border border-stone-200', 'text-xl')}
-                <div className="min-w-0 text-xs space-y-0.5">
-                  <h4 className="font-bold text-stone-900 text-sm">{m.name}</h4>
-                  {m.familyMembers && <p className="text-stone-600">{m.familyMembers}</p>}
-                  {m.contacts.map((c, i) => (c.phone || c.email) && (
-                    <p key={i} className="text-stone-700">
-                      {(m.contacts.length > 1 || c.name !== m.name) && c.name ? <strong>{c.name}: </strong> : null}
-                      {[c.phone, c.email].filter(Boolean).join(' · ')}
-                    </p>
-                  ))}
-                  {m.address && <p className="text-stone-500">{m.address}</p>}
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="mt-6 pt-4 border-t border-stone-200 text-center no-print">
-            <button onClick={() => window.print()} className="px-4 py-2 bg-stone-900 hover:bg-stone-800 text-white rounded-xl text-sm font-semibold cursor-pointer inline-flex items-center gap-1.5">
-              <Printer className="w-4 h-4" />
-              Print Directory
-            </button>
-          </div>
-        </div>
+        <DirectoryPrintSheet church={currentChurch} members={filteredMembers} />
       )}
 
       {/* Full-size photo */}
