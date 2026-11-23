@@ -362,7 +362,7 @@ export const ChurchDirectory: React.FC = () => {
               className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold cursor-pointer"
             >
               <Plus className="w-4 h-4" />
-              Add Member
+              Add a Church Member
             </button>
           )}
         </div>
