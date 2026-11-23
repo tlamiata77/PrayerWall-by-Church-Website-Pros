@@ -44,8 +44,10 @@ export const DirectoryPrintSheet: React.FC<DirectoryPrintSheetProps> = ({ church
   const exactColors = { WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as const;
 
   // Text shrinks a little as more entries share a row
-  const nameSize = columns === 3 ? 'text-[15px]' : columns === 4 ? 'text-[13px]' : 'text-[11.5px]';
-  const detailSize = columns === 3 ? 'text-[11px]' : columns === 4 ? 'text-[9.5px]' : 'text-[8.5px]';
+  const nameSize = columns === 3 ? 'text-[15px]' : columns === 4 ? 'text-[13px]' : 'text-[11px]';
+  const detailSize = columns === 3 ? 'text-[11px]' : columns === 4 ? 'text-[9.5px]' : 'text-[8px]';
+  // At 5 across the columns are too narrow for icons next to long email addresses
+  const showIcons = columns < 5;
 
   const pill = (active: boolean) =>
     `px-3 py-1.5 rounded-lg text-xs font-semibold border cursor-pointer ${
@@ -156,21 +158,21 @@ export const DirectoryPrintSheet: React.FC<DirectoryPrintSheetProps> = ({ church
                           {labelPeople && c.name && <div className="font-semibold text-stone-800">{c.name}</div>}
                           {c.phone && (
                             <div className="flex items-center justify-center gap-1">
-                              <Phone className="w-2.5 h-2.5 shrink-0" style={{ color: band }} />
+                              {showIcons && <Phone className="w-2.5 h-2.5 shrink-0" style={{ color: band }} />}
                               <span>{c.phone}</span>
                             </div>
                           )}
                           {c.email && (
                             <div className="flex items-center justify-center gap-1 min-w-0">
-                              <Mail className="w-2.5 h-2.5 shrink-0" style={{ color: band }} />
-                              <span className="break-all">{c.email}</span>
+                              {showIcons && <Mail className="w-2.5 h-2.5 shrink-0" style={{ color: band }} />}
+                              <span className="min-w-0 [overflow-wrap:anywhere]">{c.email}</span>
                             </div>
                           )}
                         </div>
                       ))}
                       {showAddresses && m.address && (
                         <div className="flex items-start justify-center gap-1">
-                          <MapPin className="w-2.5 h-2.5 shrink-0 mt-0.5" style={{ color: band }} />
+                          {showIcons && <MapPin className="w-2.5 h-2.5 shrink-0 mt-0.5" style={{ color: band }} />}
                           <span>{m.address}</span>
                         </div>
                       )}
