@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { getChurchTheme } from '../utils/theme';
+import { sortDirectory } from '../utils/directoryOrder';
 import { PhotoCropper } from './PhotoCropper';
 import { DirectoryPrintSheet } from './DirectoryPrintSheet';
 import {
@@ -121,7 +122,8 @@ export const ChurchDirectory: React.FC = () => {
 
   const churchMembers = directory.filter((m) => m.churchId === currentChurchId);
   const term = searchTerm.trim().toLowerCase();
-  const filteredMembers = churchMembers.filter((m) => {
+  // Pastor and deacons first, then everyone else alphabetically by last or family name
+  const filteredMembers = sortDirectory(churchMembers).filter((m) => {
     const haystack = [
       m.name,
       m.roleTitle,
