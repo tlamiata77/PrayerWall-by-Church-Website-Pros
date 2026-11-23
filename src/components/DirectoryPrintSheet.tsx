@@ -138,8 +138,9 @@ export const DirectoryPrintSheet: React.FC<DirectoryPrintSheetProps> = ({ church
           ) : (
             <div className="grid gap-x-4 gap-y-5" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}>
               {printable.map((m) => {
-                const contacts = m.contacts.filter((c) => c.phone || c.email);
-                const labelPeople = contacts.length > 1 || (contacts[0] && contacts[0].name && contacts[0].name !== m.name);
+                // Every adult is named under the family name, with only what they published
+                const contacts = m.contacts.filter((c) => c.name || c.phone || c.email);
+                const labelPeople = contacts.length > 1 || Boolean(contacts[0] && contacts[0].name && contacts[0].name !== m.name);
                 const src = m.photoSrc || (m.photoUrl && !m.photoUrl.startsWith('storage:') ? m.photoUrl : '');
                 return (
                   <div key={m.id} className="page-break-inside-avoid break-inside-avoid text-center">
@@ -156,7 +157,6 @@ export const DirectoryPrintSheet: React.FC<DirectoryPrintSheetProps> = ({ church
                       )}
                     </div>
                     <div className={`font-serif-church font-bold text-stone-900 mt-1.5 leading-tight ${nameSize}`}>{m.name}</div>
-                    {m.familyMembers && <div className={`text-stone-600 leading-snug ${detailSize}`}>{m.familyMembers}</div>}
                     <div className={`mt-1 space-y-0.5 text-stone-700 leading-snug ${detailSize}`}>
                       {contacts.map((c, i) => (
                         <div key={i}>
@@ -175,6 +175,7 @@ export const DirectoryPrintSheet: React.FC<DirectoryPrintSheetProps> = ({ church
                           )}
                         </div>
                       ))}
+                      {m.familyMembers && <div className="text-stone-600">Children: {m.familyMembers}</div>}
                       {showAddresses && m.address && (
                         <div className="flex items-start justify-center gap-1">
                           <MapPin className="w-2.5 h-2.5 shrink-0 mt-0.5" style={{ color: band }} />
