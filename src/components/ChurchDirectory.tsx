@@ -306,9 +306,10 @@ export const ChurchDirectory: React.FC = () => {
     );
 
   const contactLines = (m: DirectoryMember, compact = false) => {
-    const list = shownContacts(m).filter((c) => c.phone || c.email);
-    if (list.length === 0) return null;
+    // Every adult is named under the family name, with any details they published
+    const list = shownContacts(m).filter((c) => c.name || c.phone || c.email);
     const multiple = list.length > 1 || (list[0] && list[0].name && list[0].name !== m.name);
+    if (list.length === 0 || (!multiple && !list[0].phone && !list[0].email)) return null;
     return (
       <div className={compact ? 'space-y-0.5' : 'space-y-1.5'}>
         {list.map((c, i) => (
@@ -426,7 +427,7 @@ export const ChurchDirectory: React.FC = () => {
 
       {/* Photo cards */}
       {layoutMode === 'grid' && filteredMembers.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {filteredMembers.map((m) => (
             <div key={m.id} className="bg-white rounded-2xl border border-stone-200 shadow-xs overflow-hidden flex flex-col">
               <button
@@ -454,7 +455,6 @@ export const ChurchDirectory: React.FC = () => {
                     </div>
                   )}
                 </div>
-                {m.familyMembers && <p className="text-xs text-stone-600">{m.familyMembers}</p>}
                 <div className="text-xs">{contactLines(m)}</div>
                 {m.address && (
                   <p className="flex items-start gap-1.5 text-xs text-stone-500">
@@ -462,6 +462,7 @@ export const ChurchDirectory: React.FC = () => {
                     <span>{m.address}</span>
                   </p>
                 )}
+                {m.familyMembers && <p className="text-xs text-stone-600">{m.familyMembers}</p>}
                 {m.bio && <p className="text-xs text-stone-500 italic">{m.bio}</p>}
               </div>
               {(m.joinedYear || !m.isPublicInDirectory) && (
@@ -500,8 +501,8 @@ export const ChurchDirectory: React.FC = () => {
                     </div>
                   )}
                 </div>
-                {m.familyMembers && <div className="text-stone-600">{m.familyMembers}</div>}
                 {contactLines(m, true)}
+                {m.familyMembers && <div className="text-stone-600">{m.familyMembers}</div>}
               </div>
             </div>
           ))}
@@ -591,8 +592,9 @@ export const ChurchDirectory: React.FC = () => {
               {/* Listing name */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="sm:col-span-2">
-                  <label className={label} htmlFor="dir-name">Listing name *</label>
-                  <input id="dir-name" className={input} value={formName} onChange={(e) => setFormName(e.target.value)} placeholder='A person, or a family: "The Smith Family"' />
+                  <label className={label} htmlFor="dir-name">Family or person name *</label>
+                  <input id="dir-name" className={input} value={formName} onChange={(e) => setFormName(e.target.value)} placeholder='e.g. "The Keens" or "Mary Smith"' />
+                  <p className="text-[11px] text-stone-500 mt-1">Shown at the top. Each adult's name appears below it.</p>
                 </div>
                 <div>
                   <label className={label} htmlFor="dir-role">Role or title (optional)</label>
@@ -611,19 +613,20 @@ export const ChurchDirectory: React.FC = () => {
               {/* People and contact info */}
               <div className="space-y-2">
                 <div>
-                  <span className={label}>People & contact info</span>
+                  <span className={label}>Adults & contact info</span>
                   <p className="text-[11px] text-stone-500">
-                    Add each person who wants their phone or email listed. Untick "Publish" to keep a detail for staff only.
+                    Each adult can have their own phone and email. Untick "Publish" to keep a detail for staff only.
                   </p>
                 </div>
                 {formContacts.map((c, i) => (
                   <div key={i} className="rounded-xl border border-stone-200 p-3 space-y-2 bg-stone-50/60">
+                    <div className="text-[11px] font-bold uppercase tracking-wide text-stone-500">Adult {i + 1}</div>
                     <div className="flex items-center gap-2">
                       <input
                         className={input}
                         value={c.name}
                         onChange={(e) => updateContact(i, { name: e.target.value })}
-                        placeholder="Name (e.g. John)"
+                        placeholder={i === 0 ? 'Name (e.g. John Keen)' : 'Name (e.g. Mary Keen)'}
                         aria-label={`Person ${i + 1} name`}
                       />
                       {formContacts.length > 1 && (
@@ -648,14 +651,14 @@ export const ChurchDirectory: React.FC = () => {
                 ))}
                 <button type="button" onClick={() => setFormContacts((prev) => [...prev, emptyContact()])} className="flex items-center gap-1.5 text-sm font-semibold text-stone-700 hover:text-stone-900 cursor-pointer">
                   <UserPlus className="w-4 h-4" />
-                  Add another person
+                  {formContacts.length === 1 ? 'Add a second adult' : 'Add another adult'}
                 </button>
               </div>
 
               <div>
                 <label className={label} htmlFor="dir-family">Family members (optional)</label>
-                <input id="dir-family" className={input} value={formFamilyMembers} onChange={(e) => setFormFamilyMembers(e.target.value)} placeholder="e.g. John, Mary, Emma (10), Jake (7)" />
-                <p className="text-[11px] text-stone-500 mt-1">Shown under the photo. Handy for naming everyone in a family picture.</p>
+                <input id="dir-family" className={input} value={formFamilyMembers} onChange={(e) => setFormFamilyMembers(e.target.value)} placeholder="e.g. Son: Tristan, Daughter: Emma (10)" />
+                <p className="text-[11px] text-stone-500 mt-1">Shown under the contact info, exactly as typed.</p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-[1fr_120px] gap-3">

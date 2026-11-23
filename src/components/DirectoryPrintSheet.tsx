@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Printer, Mail, Phone, MapPin } from 'lucide-react';
 import { Church, DirectoryMember } from '../types';
-import { getChurchTheme } from '../utils/theme';
 
 type Columns = 3 | 4 | 5;
 
@@ -21,14 +20,12 @@ const initials = (name: string) =>
     .join('');
 
 /**
- * Printable photo directory: a colored title band, then a grid of photos with each name
- * underneath and only the phone numbers and emails people chose to publish.
+ * Printable photo directory, black and white: a title with a rule under it, then a grid of
+ * photos with each name underneath and only the phone numbers and emails people chose to publish.
  */
 export const DirectoryPrintSheet: React.FC<DirectoryPrintSheetProps> = ({ church, members }) => {
-  const theme = getChurchTheme(church);
   const [columns, setColumns] = useState<Columns>(4);
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait');
-  const [ink, setInk] = useState<'color' | 'black'>('color');
   const [showAddresses, setShowAddresses] = useState(true);
   const [title, setTitle] = useState('Church Photo Directory');
 
@@ -38,7 +35,7 @@ export const DirectoryPrintSheet: React.FC<DirectoryPrintSheetProps> = ({ church
   const pageW = orientation === 'portrait' ? 8.5 : 11;
   const pageH = orientation === 'portrait' ? 11 : 8.5;
   const margin = 0.4;
-  const band = ink === 'color' ? theme.primary : '#000000';
+  const band = '#000000';
 
   // Text shrinks a little as more entries share a row
   const nameSize = columns === 3 ? 'text-[15px]' : columns === 4 ? 'text-[13px]' : 'text-[11.5px]';
@@ -69,15 +66,6 @@ export const DirectoryPrintSheet: React.FC<DirectoryPrintSheetProps> = ({ church
             </button>
             <button type="button" className={pill(orientation === 'landscape')} onClick={() => setOrientation('landscape')}>
               ▭ Wide
-            </button>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-stone-500 font-semibold mr-1">Ink:</span>
-            <button type="button" className={pill(ink === 'color')} onClick={() => setInk('color')}>
-              Color
-            </button>
-            <button type="button" className={pill(ink === 'black')} onClick={() => setInk('black')}>
-              Black ink
             </button>
           </div>
           <label className="flex items-center gap-1.5 font-semibold text-stone-700 cursor-pointer">
@@ -111,18 +99,12 @@ export const DirectoryPrintSheet: React.FC<DirectoryPrintSheetProps> = ({ church
       {/* The sheet: real paper width on screen, scrolls sideways on phones */}
       <div className="bg-stone-200/60 rounded-2xl p-2 sm:p-6 overflow-x-auto flex justify-center-safe print:p-0 print:bg-transparent print:block print:overflow-visible">
         <div
-          className={`printable-area ${ink === 'black' ? 'ink-black' : 'ink-color'} bg-white shadow-xl shrink-0 box-border`}
+          className="printable-area ink-black bg-white shadow-xl shrink-0 box-border"
           style={{ width: `${pageW}in`, minHeight: `${pageH}in`, padding: `${margin}in` }}
         >
           <header
-            className="px-5 py-3 mb-5 flex items-end justify-between gap-4"
-            style={{
-              backgroundColor: ink === 'color' ? band : 'transparent',
-              color: ink === 'color' ? '#ffffff' : '#000000',
-              borderBottom: ink === 'black' ? '3px solid #000' : undefined,
-              WebkitPrintColorAdjust: 'exact',
-              printColorAdjust: 'exact',
-            }}
+            className="pb-2 mb-5 flex items-end justify-between gap-4 text-black"
+            style={{ borderBottom: '3px solid #000' }}
           >
             <div className="min-w-0">
               <div className="text-[10px] uppercase tracking-[0.18em] opacity-90">{church.name}</div>
@@ -138,8 +120,9 @@ export const DirectoryPrintSheet: React.FC<DirectoryPrintSheetProps> = ({ church
           ) : (
             <div className="grid gap-x-4 gap-y-5" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}>
               {printable.map((m) => {
-                const contacts = m.contacts.filter((c) => c.phone || c.email);
-                const labelPeople = contacts.length > 1 || (contacts[0] && contacts[0].name && contacts[0].name !== m.name);
+                // Every adult is named under the family name, with only what they published
+                const contacts = m.contacts.filter((c) => c.name || c.phone || c.email);
+                const labelPeople = contacts.length > 1 || Boolean(contacts[0] && contacts[0].name && contacts[0].name !== m.name);
                 const src = m.photoSrc || (m.photoUrl && !m.photoUrl.startsWith('storage:') ? m.photoUrl : '');
                 return (
                   <div key={m.id} className="page-break-inside-avoid break-inside-avoid text-center">
@@ -149,14 +132,13 @@ export const DirectoryPrintSheet: React.FC<DirectoryPrintSheetProps> = ({ church
                       ) : (
                         <div
                           className="w-full h-full flex items-center justify-center font-serif-church text-3xl text-white"
-                          style={{ backgroundColor: ink === 'color' ? theme.primary : '#9ca3af', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}
+                          style={{ backgroundColor: '#9ca3af', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}
                         >
                           {initials(m.name)}
                         </div>
                       )}
                     </div>
                     <div className={`font-serif-church font-bold text-stone-900 mt-1.5 leading-tight ${nameSize}`}>{m.name}</div>
-                    {m.familyMembers && <div className={`text-stone-600 leading-snug ${detailSize}`}>{m.familyMembers}</div>}
                     <div className={`mt-1 space-y-0.5 text-stone-700 leading-snug ${detailSize}`}>
                       {contacts.map((c, i) => (
                         <div key={i}>
@@ -181,6 +163,7 @@ export const DirectoryPrintSheet: React.FC<DirectoryPrintSheetProps> = ({ church
                           <span>{m.address}</span>
                         </div>
                       )}
+                      {m.familyMembers && <div className="text-stone-600">{m.familyMembers}</div>}
                     </div>
                   </div>
                 );
