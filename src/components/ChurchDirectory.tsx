@@ -456,13 +456,13 @@ export const ChurchDirectory: React.FC = () => {
                   )}
                 </div>
                 <div className="text-xs">{contactLines(m)}</div>
-                {m.familyMembers && <p className="text-xs text-stone-600"><span className="font-semibold text-stone-700">Children:</span> {m.familyMembers}</p>}
                 {m.address && (
                   <p className="flex items-start gap-1.5 text-xs text-stone-500">
                     <MapPin className="w-3.5 h-3.5 text-stone-400 shrink-0 mt-0.5" />
                     <span>{m.address}</span>
                   </p>
                 )}
+                {m.familyMembers && <p className="text-xs text-stone-600">{m.familyMembers}</p>}
                 {m.bio && <p className="text-xs text-stone-500 italic">{m.bio}</p>}
               </div>
               {(m.joinedYear || !m.isPublicInDirectory) && (
@@ -502,7 +502,7 @@ export const ChurchDirectory: React.FC = () => {
                   )}
                 </div>
                 {contactLines(m, true)}
-                {m.familyMembers && <div className="text-stone-600"><span className="font-semibold text-stone-700">Children:</span> {m.familyMembers}</div>}
+                {m.familyMembers && <div className="text-stone-600">{m.familyMembers}</div>}
               </div>
             </div>
           ))}
@@ -656,8 +656,9 @@ export const ChurchDirectory: React.FC = () => {
               </div>
 
               <div>
-                <label className={label} htmlFor="dir-family">Children (optional)</label>
-                <input id="dir-family" className={input} value={formFamilyMembers} onChange={(e) => setFormFamilyMembers(e.target.value)} placeholder="e.g. Emma (10), Jake (7)" />
+                <label className={label} htmlFor="dir-family">Family members (optional)</label>
+                <input id="dir-family" className={input} value={formFamilyMembers} onChange={(e) => setFormFamilyMembers(e.target.value)} placeholder="e.g. Son: Tristan, Daughter: Emma (10)" />
+                <p className="text-[11px] text-stone-500 mt-1">Shown under the contact info, exactly as typed.</p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-[1fr_120px] gap-3">

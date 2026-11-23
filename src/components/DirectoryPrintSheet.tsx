@@ -157,13 +157,13 @@ export const DirectoryPrintSheet: React.FC<DirectoryPrintSheetProps> = ({ church
                           )}
                         </div>
                       ))}
-                      {m.familyMembers && <div className="text-stone-600">Children: {m.familyMembers}</div>}
                       {showAddresses && m.address && (
                         <div className="flex items-start justify-center gap-1">
                           <MapPin className="w-2.5 h-2.5 shrink-0 mt-0.5" style={{ color: band }} />
                           <span>{m.address}</span>
                         </div>
                       )}
+                      {m.familyMembers && <div className="text-stone-600">{m.familyMembers}</div>}
                     </div>
                   </div>
                 );
