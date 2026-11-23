@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Printer, Mail, Phone, MapPin } from 'lucide-react';
 import { Church, DirectoryMember } from '../types';
+import { getChurchTheme } from '../utils/theme';
 
 type Columns = 3 | 4 | 5;
 
@@ -20,13 +21,16 @@ const initials = (name: string) =>
     .join('');
 
 /**
- * Printable photo directory, black and white: a title with a rule under it, then a grid of
- * photos with each name underneath and only the phone numbers and emails people chose to publish.
+ * Printable photo directory: a title banner (in the church's primary color, or plain with no
+ * color behind it), then a grid of color photos with each name underneath and only the phone
+ * numbers and emails people chose to publish.
  */
 export const DirectoryPrintSheet: React.FC<DirectoryPrintSheetProps> = ({ church, members }) => {
   const [columns, setColumns] = useState<Columns>(4);
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait');
   const [showAddresses, setShowAddresses] = useState(true);
+  const [colorBanner, setColorBanner] = useState(true);
+  const theme = getChurchTheme(church);
   const [title, setTitle] = useState('Church Photo Directory');
 
   // Listings staff hid from members never go on the printout
@@ -35,7 +39,9 @@ export const DirectoryPrintSheet: React.FC<DirectoryPrintSheetProps> = ({ church
   const pageW = orientation === 'portrait' ? 8.5 : 11;
   const pageH = orientation === 'portrait' ? 11 : 8.5;
   const margin = 0.4;
-  const band = '#000000';
+  // Icons follow the banner: the church color with the color banner, black with the plain one
+  const band = colorBanner ? theme.primary : '#000000';
+  const exactColors = { WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as const;
 
   // Text shrinks a little as more entries share a row
   const nameSize = columns === 3 ? 'text-[15px]' : columns === 4 ? 'text-[13px]' : 'text-[11.5px]';
@@ -72,6 +78,10 @@ export const DirectoryPrintSheet: React.FC<DirectoryPrintSheetProps> = ({ church
             <input type="checkbox" checked={showAddresses} onChange={(e) => setShowAddresses(e.target.checked)} />
             Show addresses
           </label>
+          <label className="flex items-center gap-1.5 font-semibold text-stone-700 cursor-pointer">
+            <input type="checkbox" checked={colorBanner} onChange={(e) => setColorBanner(e.target.checked)} />
+            Color banner
+          </label>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <input
@@ -99,16 +109,17 @@ export const DirectoryPrintSheet: React.FC<DirectoryPrintSheetProps> = ({ church
       {/* The sheet: real paper width on screen, scrolls sideways on phones */}
       <div className="bg-stone-200/60 rounded-2xl p-2 sm:p-6 overflow-x-auto flex justify-center-safe print:p-0 print:bg-transparent print:block print:overflow-visible">
         <div
-          className="printable-area ink-black bg-white shadow-xl shrink-0 box-border"
+          className="printable-area ink-color bg-white shadow-xl shrink-0 box-border"
           style={{ width: `${pageW}in`, minHeight: `${pageH}in`, padding: `${margin}in` }}
         >
           <header
-            className="pb-2 mb-5 flex items-end justify-between gap-4 text-black"
-            style={{ borderBottom: '3px solid #000' }}
+            className={`mb-5 flex items-end justify-between gap-4 ${colorBanner ? 'px-5 py-3 text-white' : 'pb-2 text-black'}`}
+            style={colorBanner ? { backgroundColor: theme.primary, ...exactColors } : { borderBottom: '3px solid #000' }}
           >
             <div className="min-w-0">
               <div className="text-[10px] uppercase tracking-[0.18em] opacity-90">{church.name}</div>
-              <h1 className="font-serif-church uppercase tracking-[0.08em] text-2xl sm:text-3xl leading-tight">{title}</h1>
+              {/* Not an <h1>: the shared print styles color every h1 in the brand color, which would vanish on the color banner */}
+              <div role="heading" aria-level={1} className="font-serif-church uppercase tracking-[0.08em] text-2xl sm:text-3xl leading-tight">{title}</div>
             </div>
             <div className="text-[10px] opacity-90 text-right shrink-0">
               {new Date().toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
@@ -132,7 +143,7 @@ export const DirectoryPrintSheet: React.FC<DirectoryPrintSheetProps> = ({ church
                       ) : (
                         <div
                           className="w-full h-full flex items-center justify-center font-serif-church text-3xl text-white"
-                          style={{ backgroundColor: '#9ca3af', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}
+                          style={{ backgroundColor: theme.primary, ...exactColors }}
                         >
                           {initials(m.name)}
                         </div>

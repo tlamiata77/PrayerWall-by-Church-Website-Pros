@@ -42,9 +42,12 @@ const MainContent: React.FC = () => {
   const { openLoginModal } = useApp();
   React.useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('register') === 'church') {
-      openLoginModal(undefined, 'register_church');
-      params.delete('register');
+    // Links that open a form: ?register=church (new church) and ?join=1 (invite to join a church;
+    // ?church=... in the same link picks the church)
+    const formParam = params.get('register') === 'church' ? 'register' : params.get('join') === '1' ? 'join' : null;
+    if (formParam) {
+      openLoginModal(undefined, formParam === 'register' ? 'register_church' : 'register');
+      params.delete(formParam);
       const rest = params.toString();
       window.history.replaceState(null, '', window.location.pathname + (rest ? `?${rest}` : '') + window.location.hash);
     }

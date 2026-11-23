@@ -65,6 +65,7 @@ export const ChurchDirectory: React.FC = () => {
     currentChurchId,
     activeRole,
     currentUser,
+    isSuperAdmin,
     openLoginModal,
   } = useApp();
   const theme = getChurchTheme(currentChurch);
@@ -252,9 +253,10 @@ export const ChurchDirectory: React.FC = () => {
     if (confirm(`Remove ${member.name} from the church directory?`)) deleteDirectoryMember(member.id);
   };
 
-  // The database only shares the directory with approved members of this church
+  // The database shares the directory with approved members of this church, staff, and super
+  // admins (who can see every church's, including while previewing as a member)
   const canViewDirectory =
-    canManageDirectory || Boolean(currentUser?.approved && currentUser.churchId === currentChurch.id);
+    canManageDirectory || isSuperAdmin || Boolean(currentUser?.approved && currentUser.churchId === currentChurch.id);
 
   if (!canViewDirectory) {
     return (

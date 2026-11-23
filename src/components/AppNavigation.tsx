@@ -56,7 +56,7 @@ export const AppNavigation: React.FC = () => {
   const isEmbedSimulator = activeRole === 'embed_view';
   // Approved members of this church can view and print this week's prayer list
   // (pastors and staff use the fuller Print List tab)
-  const isMemberHere = Boolean(currentUser?.approved && currentUser.churchId === currentChurch.id);
+  const isMemberHere = isSuperAdmin || Boolean(currentUser?.approved && currentUser.churchId === currentChurch.id);
   const canSeeWeeklyList = isMemberHere && !isPastorOrStaff;
 
   // Automatically ensure church members do not stay on staff/pastor-only tabs

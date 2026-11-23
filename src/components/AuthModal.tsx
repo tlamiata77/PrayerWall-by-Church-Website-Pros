@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useApp } from '../context/AppContext';
+import { useApp, DEMO_CHURCH_SLUG } from '../context/AppContext';
 import { resizeImageFile } from '../utils/imageResize';
 import {
   X,
@@ -53,7 +53,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setError(null);
       setSuccessMsg(null);
       setResetSentTo(null);
-      setSelectedChurchId(currentChurchId);
+      setSelectedChurchId(joinableChurches.some((c) => c.id === currentChurchId) ? currentChurchId : '');
     }
     // Reset only when the window opens; signing up can switch churches while it shows a message
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -64,7 +64,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
-  const [selectedChurchId, setSelectedChurchId] = useState(currentChurchId);
+  // People join a real church: the demo church (what visitors see first) isn't offered, so
+  // nobody ends up in it by accident; an invite link (?church=...&join=1) preselects the church
+  const joinableChurches = churches.filter((c) => c.slug !== DEMO_CHURCH_SLUG || churches.length === 1);
+  const [selectedChurchId, setSelectedChurchId] = useState(
+    joinableChurches.some((c) => c.id === currentChurchId) ? currentChurchId : ''
+  );
+  // An invite link opens this form before the churches have loaded; pick its church once they do
+  useEffect(() => {
+    if (isOpen && !selectedChurchId && joinableChurches.some((c) => c.id === currentChurchId)) {
+      setSelectedChurchId(currentChurchId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, churches, currentChurchId]);
   const [title, setTitle] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
 
@@ -146,7 +158,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setError('Password must be at least 6 characters');
       return;
     }
-    if (!selectedChurchId && churches.length > 0) {
+    if (!selectedChurchId && joinableChurches.length > 0) {
       setError('Please choose your church');
       return;
     }
@@ -563,10 +575,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     onChange={(e) => setSelectedChurchId(e.target.value)}
                     className="w-full px-3 py-2 text-xs rounded-lg border border-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white"
                   >
-                    <option value="" disabled={churches.length > 0}>
-                      {churches.length > 0 ? 'Choose your church...' : 'No churches yet'}
+                    <option value="" disabled={joinableChurches.length > 0}>
+                      {joinableChurches.length > 0 ? 'Choose your church...' : 'No churches yet'}
                     </option>
-                    {churches.map((c) => (
+                    {joinableChurches.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name}
                       </option>
